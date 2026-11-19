@@ -95,7 +95,7 @@ export const RoomAndProfileModals: React.FC = () => {
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
     updateLocalProfile({
-      name: draftName.trim() || 'Kaito',
+      name: draftName.trim() || 'Người chơi',
       outfit: draftOutfit,
       tintColor: draftColor,
     });
@@ -292,7 +292,7 @@ export const RoomAndProfileModals: React.FC = () => {
                     className="mb-1 rounded-full border px-2.5 py-0.5 text-[11px] font-bold text-white bg-[#181026]/90 shadow"
                     style={{ borderColor: draftColor }}
                   >
-                    {draftName.trim() || 'Kaito'}
+                    {draftName.trim() || 'Người chơi'}
                   </div>
                   <img
                     src={resolvedPreview.path}

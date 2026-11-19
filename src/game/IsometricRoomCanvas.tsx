@@ -128,11 +128,8 @@ function computeSpritePlacement(
   };
 }
 
-function getCharacterBaseScale(outfit: PlayerState['outfit']): number {
-  if (isIsoCharacter(outfit)) return 0.48;
-  if (outfit === 'skirt') return 0.33;
-  if (outfit === 'pants') return 0.36;
-  return 0.26;
+function getCharacterBaseScale(): number {
+  return 0.48;
 }
 
 function createRadialGlowTexture(color: number): Texture {
@@ -1483,7 +1480,7 @@ export const IsometricRoomCanvas: React.FC = () => {
             focusRing.visible = false;
 
             const sprite = new Sprite();
-            sprite.anchor.set(0.5, 1.0);
+            sprite.anchor.set(0.5, 0.975);
 
             container.addChild(shadow, focusRing, sprite);
             sortLayer.addChild(container);
@@ -1518,11 +1515,10 @@ export const IsometricRoomCanvas: React.FC = () => {
           vis.container.position.set(screenPos.x, screenPos.y + seatOffsetY);
           vis.container.zIndex = (vis.gx + vis.gy) * 100 + 26;
 
-          const isoChar = isIsoCharacter(player.outfit);
-          const baseScale = getCharacterBaseScale(player.outfit);
+          const baseScale = getCharacterBaseScale();
 
           if (player.isMoving) {
-            vis.walkPhase += dt * (isoChar ? (player.isRunning ? 12 : 8) : player.isRunning ? 18 : 11);
+            vis.walkPhase += dt * (player.isRunning ? 12 : 8);
           } else {
             vis.walkPhase += dt * 3.2;
           }
@@ -1538,17 +1534,9 @@ export const IsometricRoomCanvas: React.FC = () => {
           vis.sprite.texture = getTex(resolved.path);
 
           if (player.isMoving) {
-            if (isoChar) {
-              const stepBob = 1 + Math.abs(Math.sin(vis.walkPhase * Math.PI * 0.5)) * 0.025;
-              vis.sprite.rotation = 0;
-              vis.sprite.scale.set(baseScale * flipX, baseScale * stepBob);
-            } else {
-              const bobY = 1 + Math.sin(vis.walkPhase * 2) * (player.isRunning ? 0.08 : 0.04);
-              const squashX = 1 - Math.sin(vis.walkPhase * 2) * (player.isRunning ? 0.05 : 0.025);
-              vis.sprite.rotation =
-                (Math.sin(vis.walkPhase) * (player.isRunning ? 6 : 3) * Math.PI) / 180;
-              vis.sprite.scale.set(baseScale * squashX * flipX, baseScale * bobY);
-            }
+            const stepBob = 1 + Math.abs(Math.sin(vis.walkPhase * Math.PI * 0.5)) * 0.025;
+            vis.sprite.rotation = 0;
+            vis.sprite.scale.set(baseScale * flipX, baseScale * stepBob);
           } else {
             const breath =
               player.activity === 'focus_desk'

@@ -124,6 +124,23 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
+app.all('/api/prune-ghosts', (_req, res) => {
+  const active = io.sockets.sockets;
+  let removed = 0;
+  for (const [code, room] of rooms.entries()) {
+    for (const pid of Object.keys(room.players)) {
+      if (!active.has(pid) || room.players[pid]?.name === 'tmp_probe') {
+        console.log(`[server] Pruned ghost player ${room.players[pid]?.name} (${pid}) from #${code}`);
+        delete room.players[pid];
+        socketRoomMap.delete(pid);
+        io.to(code).emit('player:left', { playerId: pid });
+        removed++;
+      }
+    }
+  }
+  res.json({ ok: true, removed });
+});
+
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
@@ -131,6 +148,21 @@ const io = new Server(server, {
     methods: ['GET', 'POST'],
   },
 });
+
+// Periodic pruner for disconnected/ghost sockets (every 10 seconds)
+setInterval(() => {
+  const active = io.sockets.sockets;
+  for (const [code, room] of rooms.entries()) {
+    for (const pid of Object.keys(room.players)) {
+      if (!active.has(pid)) {
+        console.log(`[server] Auto-pruning dead socket ${room.players[pid]?.name} (${pid})`);
+        delete room.players[pid];
+        socketRoomMap.delete(pid);
+        io.to(code).emit('player:left', { playerId: pid });
+      }
+    }
+  }
+}, 10000);
 
 const socketRoomMap = new Map<string, { roomCode: string; hostKey: string }>();
 
@@ -173,7 +205,7 @@ io.on('connection', (socket) => {
 
       const newPlayer: PlayerState = {
         id: socket.id,
-        name: (payload.player?.name || 'Kaito').slice(0, 24),
+        name: (payload.player?.name || 'Khách').slice(0, 24),
         outfit: payload.player?.outfit || 'c7',
         tintColor: payload.player?.tintColor || '#a78bfa',
         gx: payload.player?.gx ?? 4.5,

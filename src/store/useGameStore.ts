@@ -228,8 +228,8 @@ const savedProfile = loadJsonStorage<{
   outfit: OutfitId;
   tintColor: string;
 }>('cozy_player_profile_v2', {
-  name: 'Kaito',
-  outfit: 'c7',
+  name: 'Người chơi',
+  outfit: 'c1',
   tintColor: '#a78bfa',
 });
 

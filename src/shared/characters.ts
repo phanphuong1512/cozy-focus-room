@@ -108,28 +108,14 @@ export const CHARACTER_SKINS: CharacterSkinMeta[] = [
     avatar: '/sprites/characters/c6/avatar.png',
     isModularIso: true,
   },
-  {
-    id: 'vintage',
-    name: 'Froggie Váy Hoa',
-    subtitle: 'Phiên bản cổ điển',
-    avatar: '/sprites/character/portrait_happy.png',
-    isModularIso: false,
-  },
 ];
 
-export function isIsoCharacter(outfit: OutfitId): boolean {
+export function isIsoCharacter(outfit: string): outfit is OutfitId {
   return (ISO_CHARACTER_IDS as readonly string[]).includes(outfit);
 }
 
 export function getAllCharacterSpritePaths(): string[] {
-  const paths: string[] = [
-    '/sprites/character/froggie_front.png',
-    '/sprites/character/froggie_back.png',
-    '/sprites/character/froggie_left.png',
-    '/sprites/character/froggie_right.png',
-    '/sprites/character/froggie_variant_skirt.png',
-    '/sprites/character/froggie_variant_pants.png',
-  ];
+  const paths: string[] = [];
 
   const frameNames = [
     'idle_se',
@@ -157,41 +143,18 @@ export function getAllCharacterSpritePaths(): string[] {
 }
 
 export function resolveIsoCharacterFrame(
-  outfit: OutfitId,
+  outfit: OutfitId | string,
   facing: FacingDirection,
   activity: ActivityType,
   isMoving: boolean,
   walkFrame: number
 ): { path: string; flipX: boolean } {
+  const safeOutfit: OutfitId = isIsoCharacter(outfit) ? outfit : 'c1';
   const isNorthSide = facing === 'nw' || facing === 'ne' || facing === 'back';
   const flipNorth = facing === 'ne';
   const flipSouth = facing === 'sw' || facing === 'left';
 
-  if (!isIsoCharacter(outfit)) {
-    if (outfit === 'skirt') {
-      return {
-        path: '/sprites/character/froggie_variant_skirt.png',
-        flipX: facing === 'left' || facing === 'sw' || facing === 'nw',
-      };
-    }
-    if (outfit === 'pants') {
-      return {
-        path: '/sprites/character/froggie_variant_pants.png',
-        flipX: facing === 'left' || facing === 'sw' || facing === 'nw',
-      };
-    }
-    const baseFacing =
-      facing === 'nw' || facing === 'ne' || facing === 'back'
-        ? '/sprites/character/froggie_back.png'
-        : facing === 'left' || facing === 'sw'
-        ? '/sprites/character/froggie_left.png'
-        : facing === 'right'
-        ? '/sprites/character/froggie_right.png'
-        : '/sprites/character/froggie_front.png';
-    return { path: baseFacing, flipX: false };
-  }
-
-  const baseDir = `/sprites/characters/${outfit}`;
+  const baseDir = `/sprites/characters/${safeOutfit}`;
 
   if (activity === 'focus_desk') {
     if (isNorthSide) {

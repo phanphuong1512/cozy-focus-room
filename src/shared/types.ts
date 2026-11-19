@@ -35,10 +35,7 @@ export type OutfitId =
   | 'c9'
   | 'c10'
   | 'c11'
-  | 'c12'
-  | 'vintage'
-  | 'skirt'
-  | 'pants';
+  | 'c12';
 
 export type WallTheme = 'cream' | 'lofi_purple' | 'sage' | 'brick';
 
