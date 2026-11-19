@@ -423,7 +423,51 @@ export const IsometricRoomCanvas: React.FC = () => {
         const W = Math.max(...layout.floorMap.map((r) => r.length));
         const palette = WALL_PALETTES[layout.wallTheme] || WALL_PALETTES.lofi_purple;
 
-        // 1. Back Walls (Per-segment custom walls if defined, otherwise full outer walls)
+        // 1. Back Walls (Rendered as crisp 3-row isometric tile grids matching the floor!)
+        const WALL_ROWS = 3;
+        const rowH = WALL_HEIGHT / WALL_ROWS;
+
+        const drawTiledWallPanel = (
+          g: Graphics,
+          p0: { x: number; y: number },
+          p1: { x: number; y: number },
+          isLeft: boolean
+        ) => {
+          const baseColor = isLeft ? palette.left : palette.right;
+          for (let r = 0; r < WALL_ROWS; r++) {
+            const y0 = r * rowH;
+            const y1 = (r + 1) * rowH;
+            g.poly([
+              p0.x,
+              p0.y - y0,
+              p1.x,
+              p1.y - y0,
+              p1.x,
+              p1.y - y1,
+              p0.x,
+              p0.y - y1,
+            ]);
+            g.fill({ color: baseColor });
+            // Crisp tile grout border so each wall cell reads as a distinct tile like the floor
+            g.stroke({ color: 0x090512, width: 1.25, alpha: 0.24 });
+
+            // Subtle top highlight bevel on each wall cell
+            g.moveTo(p0.x, p0.y - y1 + 1.5);
+            g.lineTo(p1.x, p1.y - y1 + 1.5);
+            g.stroke({ color: 0xffffff, width: 1, alpha: isLeft ? 0.08 : 0.13 });
+          }
+
+          // Top molding trim
+          g.moveTo(p0.x, p0.y - WALL_HEIGHT);
+          g.lineTo(p1.x, p1.y - WALL_HEIGHT);
+          g.stroke({ color: palette.trim, width: 5 });
+
+          // Baseboard
+          g.moveTo(p0.x, p0.y - 5);
+          g.lineTo(p1.x, p1.y - 5);
+          g.stroke({ color: palette.base, width: 7, alpha: 0.78 });
+        };
+
         if (Array.isArray(layout.walls)) {
           for (const wKey of layout.walls) {
             const [side, coords] = wKey.split(':');
@@ -437,79 +481,18 @@ export const IsometricRoomCanvas: React.FC = () => {
 
             const wg = new Graphics();
             wg.label = 'wall_segment';
-            wg.poly([
-              p0.x,
-              p0.y,
-              p1.x,
-              p1.y,
-              p1.x,
-              p1.y - WALL_HEIGHT,
-              p0.x,
-              p0.y - WALL_HEIGHT,
-            ]);
-            wg.fill({ color: isLeft ? palette.left : palette.right });
-
-            // Top molding trim
-            wg.moveTo(p0.x, p0.y - WALL_HEIGHT);
-            wg.lineTo(p1.x, p1.y - WALL_HEIGHT);
-            wg.stroke({ color: palette.trim, width: 5 });
-
-            // Baseboard
-            wg.moveTo(p0.x, p0.y - 6);
-            wg.lineTo(p1.x, p1.y - 6);
-            wg.stroke({ color: palette.base, width: 7, alpha: 0.75 });
-
-            // Subtle seam line
-            wg.moveTo(p0.x, p0.y);
-            wg.lineTo(p0.x, p0.y - WALL_HEIGHT);
-            wg.stroke({ color: 0x000000, width: 1, alpha: 0.14 });
-
+            drawTiledWallPanel(wg, p0, p1, isLeft);
             wg.zIndex = (sx + sy + 0.5) * 100 - 15;
             sortLayer.addChild(wg);
           }
         } else {
           const wallsG = new Graphics();
-          const cornerTop = gridToScreen(0, 0);
-          const cornerLeft = gridToScreen(0, H);
-          const cornerRight = gridToScreen(W, 0);
-
-          // Left wall polygon
-          wallsG.poly([
-            cornerTop.x,
-            cornerTop.y,
-            cornerLeft.x,
-            cornerLeft.y,
-            cornerLeft.x,
-            cornerLeft.y - WALL_HEIGHT,
-            cornerTop.x,
-            cornerTop.y - WALL_HEIGHT,
-          ]);
-          wallsG.fill({ color: palette.left });
-
-          // Right wall polygon
-          wallsG.poly([
-            cornerTop.x,
-            cornerTop.y,
-            cornerRight.x,
-            cornerRight.y,
-            cornerRight.x,
-            cornerRight.y - WALL_HEIGHT,
-            cornerTop.x,
-            cornerTop.y - WALL_HEIGHT,
-          ]);
-          wallsG.fill({ color: palette.right });
-
-          // Top molding trim & baseboard
-          wallsG.moveTo(cornerLeft.x, cornerLeft.y - WALL_HEIGHT);
-          wallsG.lineTo(cornerTop.x, cornerTop.y - WALL_HEIGHT);
-          wallsG.lineTo(cornerRight.x, cornerRight.y - WALL_HEIGHT);
-          wallsG.stroke({ color: palette.trim, width: 6 });
-
-          wallsG.moveTo(cornerLeft.x, cornerLeft.y - 10);
-          wallsG.lineTo(cornerTop.x, cornerTop.y - 10);
-          wallsG.lineTo(cornerRight.x, cornerRight.y - 10);
-          wallsG.stroke({ color: palette.base, width: 8, alpha: 0.7 });
-
+          for (let gy = 0; gy < H; gy++) {
+            drawTiledWallPanel(wallsG, gridToScreen(0, gy), gridToScreen(0, gy + 1), true);
+          }
+          for (let gx = 0; gx < W; gx++) {
+            drawTiledWallPanel(wallsG, gridToScreen(gx, 0), gridToScreen(gx + 1, 0), false);
+          }
           backdropLayer.addChild(wallsG);
         }
 
@@ -1416,19 +1399,24 @@ export const IsometricRoomCanvas: React.FC = () => {
               const isLeft = state.placeFlipped ? fracY < fracX : fracX <= fracY;
               const p0 = gridToScreen(tx, ty);
               const p1 = isLeft ? gridToScreen(tx, ty + 1) : gridToScreen(tx + 1, ty);
-              hoverCursor.poly([
-                p0.x,
-                p0.y,
-                p1.x,
-                p1.y,
-                p1.x,
-                p1.y - WALL_HEIGHT,
-                p0.x,
-                p0.y - WALL_HEIGHT,
-              ]);
               const isRemove = state.activeWallBrush === 'remove';
-              hoverCursor.fill({ color: isRemove ? 0xfb7185 : 0xa78bfa, alpha: 0.45 });
-              hoverCursor.stroke({ color: 0xffffff, width: 2, alpha: 0.9 });
+              const rowH = WALL_HEIGHT / 3;
+              for (let r = 0; r < 3; r++) {
+                const y0 = r * rowH;
+                const y1 = (r + 1) * rowH;
+                hoverCursor.poly([
+                  p0.x,
+                  p0.y - y0,
+                  p1.x,
+                  p1.y - y0,
+                  p1.x,
+                  p1.y - y1,
+                  p0.x,
+                  p0.y - y1,
+                ]);
+                hoverCursor.fill({ color: isRemove ? 0xfb7185 : 0xa78bfa, alpha: 0.42 });
+                hoverCursor.stroke({ color: 0xffffff, width: 1.5, alpha: 0.85 });
+              }
             }
             localGhostSprite.visible = false;
           } else if (activeCatId) {
