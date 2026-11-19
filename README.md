@@ -1,34 +1,34 @@
-# Cozy Focus Room ☕🎧
+# Cozy Focus Room
 
-Game Desktop kết hợp Pomodoro, Lo-fi chill và trang trí phòng Isometric nhiều người chơi trực tuyến (Multiplayer).
+Game Desktop ket hop Pomodoro, nhac Lo-fi va trang tri phong Isometric truc tuyen (Multiplayer).
 
 ---
 
-## 📥 Tải Game Cài Đặt (Download)
+## Cai dat ung dung
 
-Bạn chỉ cần chọn đúng 1 file theo hệ điều hành máy tính của mình:
+Nguoi choi chon file cai dat theo he dieu hanh:
 
-| Hệ điều hành | File tải về | Dung lượng | Hướng dẫn cài |
+| He dieu hanh | File tai ve | Dung luong | Huong dan cai dat |
 | :--- | :--- | :--- | :--- |
-| 🍎 **macOS** | [**Cozy.Focus.Room_universal.dmg**](https://github.com/phanphuong1512/cozy-focus-room/releases/latest/download/Cozy.Focus.Room_1.0.3_universal.dmg) | ~32 MB | Mở file `.dmg` -> Kéo app vào thư mục `Applications` |
-| 🪟 **Windows** | [**Cozy.Focus.Room_x64-setup.exe**](https://github.com/phanphuong1512/cozy-focus-room/releases/latest/download/Cozy.Focus.Room_1.0.3_x64-setup.exe) | ~15 MB | Chạy file `.exe` -> Bấm Next để cài đặt |
+| **macOS** | [Cozy.Focus.Room_universal.dmg](https://github.com/phanphuong1512/cozy-focus-room/releases/latest/download/Cozy.Focus.Room_1.0.3_universal.dmg) | ~32 MB | Mo file .dmg va keo ung dung vao thu muc Applications (ho tro ca Apple Silicon va Intel) |
+| **Windows** | [Cozy.Focus.Room_x64-setup.exe](https://github.com/phanphuong1512/cozy-focus-room/releases/latest/download/Cozy.Focus.Room_1.0.3_x64-setup.exe) | ~15 MB | Mo file .exe va lam theo cac buoc cai dat |
 
-> 🔄 **Tự động Cập nhật:** Game đã tích hợp sẵn hệ thống Auto-Updater. Khi có bản cập nhật mới trên GitHub, app sẽ tự động thông báo và cập nhật.
-
----
-
-## ✨ Tính năng chính
-
-- 🛋️ **Multiplayer Room:** Cùng bạn bè vào chung một phòng, tương tác và trò chuyện qua Railway backend.
-- 📐 **Decor Studio & Isometric Grid:** Hệ thống lưới chuẩn xác, hỗ trợ cả bàn chữ L, tủ lạnh, thảm và xoay lật đồ vật.
-- 🧑‍🎨 **12 Nhân vật Modular:** Tùy biến trang phục, tóc, phụ kiện với sprite sheets hoạt ảnh mượt mà.
-- ⏱️ **Đồng hồ Pomodoro:** Chế độ tập trung học tập & làm việc cùng nhau.
-- 🎵 **Lo-fi Chill Radio:** Tuyển tập giai điệu thư giãn nhẹ nhàng.
+Tu dong cap nhat: Ung dung tich hop san tinh nang Auto-Updater. Khi co phien ban moi tren GitHub, tro choi se tu dong kiem tra va thong bao cap nhat.
 
 ---
 
-## 🛠️ Dành cho Nhà phát triển (Development)
+## Tinh nang chinh
 
-- **Client:** Vite + React + TypeScript + Tauri v2 (Rust)
-- **Backend:** Node.js + Express + Socket.IO + Railway
-- **CI/CD:** GitHub Actions tự động build Desktop cho macOS & Windows và xuất bản Release khi push code vào nhánh `main`.
+- Phong truc tuyen Multiplayer: Tham gia chung phong va tuong tac voi ban be qua may chu Railway.
+- He thong luoi Isometric: Ho tro sap xep do dac, bep chu L, tu lanh, tham va xoay lat doi tuong.
+- 12 nhan vat: Tuy bien phong cach va hoat anh chuyen dong.
+- Dong ho Pomodoro: Ho tro tap trung hoc tap va lam viec.
+- Trinh phat nhac Lo-fi: Tich hop san danh sach phat thu gian.
+
+---
+
+## Cong nghe phat trien
+
+- Client: Vite, React, TypeScript, Tauri v2 (Rust)
+- Backend: Node.js, Express, Socket.IO, Railway
+- CI/CD: GitHub Actions tu dong dong goi ban cai dat cho macOS va Windows khi cap nhat nhanh main.

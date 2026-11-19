@@ -147,8 +147,6 @@ jobs:
               ".tar.gz.sig",
               "-setup.exe",
               "-setup.exe.sig",
-              ".msi",
-              ".msi.sig",
             ];
             const found = [];
 
@@ -215,7 +213,7 @@ jobs:
               `https://github.com/${process.env.GITHUB_REPOSITORY}/releases/download/${process.env.TAG}/${encodeURIComponent(assetName)}`;
 
             const macTar = findAsset(".app.tar.gz") || findAsset(".tar.gz");
-            const winInstaller = findAsset("-setup.exe") || findAsset(".msi");
+            const winInstaller = findAsset("-setup.exe");
             if (!macTar) throw new Error("Missing macOS updater tarball (.app.tar.gz)");
             if (!winInstaller) throw new Error("Missing Windows updater installer (-setup.exe)");
 
@@ -248,19 +246,16 @@ jobs:
 
           gh release upload "$TAG" latest.json --repo "$GITHUB_REPOSITORY" --clobber
           
-          NOTES="### 🎮 Tải Cozy Focus Room cho máy của bạn
+          NOTES="### Cài đặt Cozy Focus Room
 
-| Hệ điều hành | File cài đặt (Bấm tải trực tiếp) | Mô tả |
+| Hệ điều hành | File tải về | Mô tả |
 | :--- | :--- | :--- |
-| 🍎 **macOS** | [**Tải file .DMG**](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/Cozy.Focus.Room_${VERSION}_universal.dmg) | Dành cho máy Mac (chạy mượt trên cả Apple Silicon M1-M4 & Intel) |
-| 🪟 **Windows** | [**Tải file .EXE**](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/Cozy.Focus.Room_${VERSION}_x64-setup.exe) | Bộ cài đặt thông dụng cho Windows 10/11 |
-| 🏢 **Windows (MSI)** | [Tải file .MSI](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/Cozy.Focus.Room_${VERSION}_x64_en-US.msi) | Bản cài đặt gói MSI cho quản trị viên |
+| **macOS** | [Cozy.Focus.Room_${VERSION}_universal.dmg](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/Cozy.Focus.Room_${VERSION}_universal.dmg) | Dành cho macOS (hỗ trợ cả Apple Silicon và Intel) |
+| **Windows** | [Cozy.Focus.Room_${VERSION}_x64-setup.exe](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/Cozy.Focus.Room_${VERSION}_x64-setup.exe) | Bộ cài đặt tiêu chuẩn cho Windows 10/11 |
 
----
+*Lưu ý: Các file còn lại (\`.tar.gz\`, \`.sig\`, \`latest.json\`) là tệp hệ thống phục vụ cơ chế tự động cập nhật ngầm (Auto-Updater), người dùng không cần tải thủ công.*
 
-> 💡 **Lưu ý:** Các file còn lại (\`.tar.gz\`, \`.sig\`, \`latest.json\`) là file hệ thống dành riêng cho tính năng **Tự động Cập nhật ngầm (Auto-Updater)** của game, người dùng không cần tải thủ công.
-
-#### 📝 Ghi chú phát hành:
+#### Ghi chú phát hành:
 $(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body -q .body)"
 
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes "$NOTES" --draft=false --latest
