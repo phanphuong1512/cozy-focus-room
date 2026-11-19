@@ -47,10 +47,10 @@ jobs:
             echo "Cập nhật Cozy Focus Room ${TAG}" > release_notes.txt
           fi
 
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release edit "$TAG" --draft --title "Cozy Focus Room ${TAG}" --notes-file release_notes.txt
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft --title "Cozy Focus Room ${TAG}" --notes-file release_notes.txt
           else
-            gh release create "$TAG" --draft --title "Cozy Focus Room ${TAG}" --notes-file release_notes.txt
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --title "Cozy Focus Room ${TAG}" --notes-file release_notes.txt
           fi
 
           echo "should_release=true" >> "$GITHUB_OUTPUT"
@@ -136,19 +136,48 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.prepare-release.outputs.tag }}
         run: |
-          mkdir -p artifacts_to_upload
-          find src-tauri/target -path "*/release/bundle/*" -type f \( \
-            -name "*.dmg" -o \
-            -name "*.tar.gz" -o \
-            -name "*.tar.gz.sig" -o \
-            -name "*-setup.exe" -o \
-            -name "*-setup.exe.sig" -o \
-            -name "*.msi" -o \
-            -name "*.msi.sig" \
-          \) -exec cp {} artifacts_to_upload/ \;
+          node -e '
+            const fs = require("fs");
+            const path = require("path");
+            const { execFileSync } = require("child_process");
 
-          ls -la artifacts_to_upload/
-          gh release upload "$TAG" artifacts_to_upload/* --clobber
+            const suffixes = [
+              ".dmg",
+              ".tar.gz",
+              ".tar.gz.sig",
+              "-setup.exe",
+              "-setup.exe.sig",
+              ".msi",
+              ".msi.sig",
+            ];
+            const found = [];
+
+            const walk = (dir) => {
+              if (!fs.existsSync(dir)) return;
+              for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                const full = path.join(dir, entry.name);
+                if (entry.isDirectory()) {
+                  walk(full);
+                } else if (entry.isFile()) {
+                  const norm = full.replace(/\\/g, "/");
+                  if (norm.includes("/release/bundle/") && suffixes.some((s) => entry.name.endsWith(s))) {
+                    found.push(full);
+                  }
+                }
+              }
+            };
+
+            walk(path.join("src-tauri", "target"));
+            if (found.length === 0) {
+              throw new Error("No installer or updater bundle artifacts found under src-tauri/target/**/release/bundle/");
+            }
+            console.log("Uploading release artifacts:\n" + found.join("\n"));
+            execFileSync(
+              "gh",
+              ["release", "upload", process.env.TAG, ...found, "--repo", process.env.GITHUB_REPOSITORY, "--clobber"],
+              { stdio: "inherit" }
+            );
+          '
 
   publish-release:
     needs: [prepare-release, build-and-release]
@@ -161,9 +190,9 @@ jobs:
           TAG: ${{ needs.prepare-release.outputs.tag }}
           VERSION: ${{ needs.prepare-release.outputs.version }}
         run: |
-          gh release view "$TAG" --json assets,body > release_info.json
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets,body > release_info.json
           mkdir -p sigs
-          gh release download "$TAG" --pattern "*.sig" --dir sigs
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "*.sig" --dir sigs
           ls -la sigs/
 
           node -e '
@@ -178,8 +207,12 @@ jobs:
               if (!fs.existsSync(sigPath)) {
                 throw new Error("Missing signature file: " + sigPath);
               }
-              return fs.readFileSync(sigPath, "utf8").trim();
+              const sig = fs.readFileSync(sigPath, "utf8").trim();
+              if (!sig) throw new Error("Empty signature file: " + sigPath);
+              return sig;
             };
+            const downloadUrl = (assetName) =>
+              `https://github.com/${process.env.GITHUB_REPOSITORY}/releases/download/${process.env.TAG}/${encodeURIComponent(assetName)}`;
 
             const macTar = findAsset(".app.tar.gz") || findAsset(".tar.gz");
             const winInstaller = findAsset("-setup.exe") || findAsset(".msi");
@@ -196,15 +229,15 @@ jobs:
               platforms: {
                 "darwin-aarch64": {
                   signature: macSig,
-                  url: macTar.url,
+                  url: downloadUrl(macTar.name),
                 },
                 "darwin-x86_64": {
                   signature: macSig,
-                  url: macTar.url,
+                  url: downloadUrl(macTar.name),
                 },
                 "windows-x86_64": {
                   signature: winSig,
-                  url: winInstaller.url,
+                  url: downloadUrl(winInstaller.name),
                 },
               },
             };
@@ -213,5 +246,5 @@ jobs:
             console.log("Generated latest.json:\n", JSON.stringify(latest, null, 2));
           '
 
-          gh release upload "$TAG" latest.json --clobber
-          gh release edit "$TAG" --draft=false --latest
+          gh release upload "$TAG" latest.json --repo "$GITHUB_REPOSITORY" --clobber
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
