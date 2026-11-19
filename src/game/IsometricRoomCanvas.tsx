@@ -218,8 +218,54 @@ export const IsometricRoomCanvas: React.FC = () => {
     };
 
     const textureMap = new Map<string, Texture>();
-    const getTex = (path: string): Texture =>
-      textureMap.get(path) || Texture.WHITE;
+
+    const loadSingleTexture = (url: string): Promise<Texture> => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const tex = Texture.from(img);
+            tex.source.style.scaleMode = 'nearest';
+            resolve(tex);
+          } catch {
+            resolve(Texture.WHITE);
+          }
+        };
+        img.onerror = () => {
+          const altUrl = url.startsWith('/') ? url.slice(1) : '/' + url;
+          const fallbackImg = new Image();
+          fallbackImg.onload = () => {
+            try {
+              const tex = Texture.from(fallbackImg);
+              tex.source.style.scaleMode = 'nearest';
+              resolve(tex);
+            } catch {
+              resolve(Texture.WHITE);
+            }
+          };
+          fallbackImg.onerror = () => {
+            console.warn('[texture] Could not load image asset:', url);
+            resolve(Texture.WHITE);
+          };
+          fallbackImg.src = altUrl;
+        };
+        img.src = url;
+      });
+    };
+
+    const getTex = (path: string): Texture => {
+      let tex = textureMap.get(path);
+      if (!tex) {
+        try {
+          tex = Texture.from(path);
+          tex.source.style.scaleMode = 'nearest';
+          textureMap.set(path, tex);
+        } catch {
+          tex = Texture.WHITE;
+        }
+      }
+      return tex;
+    };
 
     const preloadAllAssets = async () => {
       const paths = new Set<string>([
@@ -236,11 +282,9 @@ export const IsometricRoomCanvas: React.FC = () => {
       const list = Array.from(paths);
       await Promise.all(
         list.map(async (p) => {
-          try {
-            const tex = await Assets.load<Texture>(p);
+          const tex = await loadSingleTexture(p);
+          if (tex && tex !== Texture.WHITE) {
             textureMap.set(p, tex);
-          } catch (e) {
-            console.warn('[pixi] Could not load texture:', p, e);
           }
         })
       );

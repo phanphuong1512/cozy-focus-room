@@ -46,6 +46,7 @@ export const RoomAndProfileModals: React.FC = () => {
   const setShowRoomModal = useGameStore((s) => s.setShowRoomModal);
   const setShowProfileModal = useGameStore((s) => s.setShowProfileModal);
   const joinRoom = useGameStore((s) => s.joinRoom);
+  const resetDefaultRoom = useGameStore((s) => s.resetDefaultRoom);
   const updateLocalProfile = useGameStore((s) => s.updateLocalProfile);
   const setAllowGuestBuild = useGameStore((s) => s.setAllowGuestBuild);
 
@@ -160,22 +161,38 @@ export const RoomAndProfileModals: React.FC = () => {
               </div>
 
               {isHost && (
-                <label className="flex items-center justify-between rounded-2xl bg-white/5 border border-white/10 p-3 cursor-pointer">
-                  <div>
-                    <div className="text-xs font-bold text-slate-100">
-                      Cho phép khách cùng sửa nhà
+                <>
+                  <label className="flex items-center justify-between rounded-2xl bg-white/5 border border-white/10 p-3 cursor-pointer">
+                    <div>
+                      <div className="text-xs font-bold text-slate-100">
+                        Cho phép khách cùng sửa nhà
+                      </div>
+                      <div className="text-[11px] text-slate-400">
+                        Tắt để chỉ mình bạn (Chủ phòng) được decor
+                      </div>
                     </div>
-                    <div className="text-[11px] text-slate-400">
-                      Tắt để chỉ mình bạn (Chủ phòng) được decor
-                    </div>
+                    <input
+                      type="checkbox"
+                      checked={layout.allowGuestBuild}
+                      onChange={(e) => setAllowGuestBuild(e.target.checked)}
+                      className="w-4 h-4 accent-pink-500"
+                    />
+                  </label>
+
+                  <div className="flex items-center justify-end px-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        resetDefaultRoom();
+                        setShowRoomModal(false);
+                      }}
+                      className="flex items-center gap-1.5 text-xs text-pink-300/80 hover:text-pink-200 transition"
+                    >
+                      <RotateCw className="w-3.5 h-3.5" />
+                      Khôi phục bài trí phòng mẫu ban đầu
+                    </button>
                   </div>
-                  <input
-                    type="checkbox"
-                    checked={layout.allowGuestBuild}
-                    onChange={(e) => setAllowGuestBuild(e.target.checked)}
-                    className="w-4 h-4 accent-pink-500"
-                  />
-                </label>
+                </>
               )}
 
               <form onSubmit={handleJoinSubmit} className="space-y-2">

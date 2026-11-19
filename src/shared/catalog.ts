@@ -767,8 +767,8 @@ export function createDefaultRoomLayout(
       'WWWWWWBBBB',
     ],
     wallTheme: 'lofi_purple',
-    lightingMode: 'night',
-    rainEnabled: true,
+    lightingMode: 'day',
+    rainEnabled: false,
     items: defaultItems,
   };
 }
