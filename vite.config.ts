@@ -9,6 +9,14 @@ export default defineConfig({
     port: 5173,
     host: true,
     strictPort: true,
+    watch: {
+      ignored: [
+        "**/server/**",
+        "**/src-tauri/**",
+        "**/dist/**",
+        "**/.git/**",
+      ],
+    },
     proxy: {
       "/socket.io": {
         target: "http://localhost:3001",
