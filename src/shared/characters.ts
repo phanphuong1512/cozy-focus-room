@@ -1,4 +1,96 @@
-import type { ActivityType, FacingDirection, OutfitId } from './types';
+import type {
+  ActivityType,
+  CustomAvatarConfig,
+  FacingDirection,
+  OutfitId,
+  HairStyleId,
+  EyeStyleId,
+  TopStyleId,
+  AccessoryId,
+} from './types';
+
+export const DEFAULT_CUSTOM_AVATAR: CustomAvatarConfig = {
+  skinTone: '#f3d2b3',
+  hairStyle: 'short',
+  hairColor: '#3b2820',
+  eyeStyle: 'cute',
+  blush: true,
+  topStyle: 'hoodie',
+  topColor: '#a78bfa',
+  bottomColor: '#334155',
+  shoeColor: '#f8fafc',
+  accessory: 'headphones',
+};
+
+export const SKIN_TONES: { label: string; color: string }[] = [
+  { label: 'Sáng hồng', color: '#fbe0cc' },
+  { label: 'Tự nhiên', color: '#f3d2b3' },
+  { label: 'Ấm áp', color: '#e5b88b' },
+  { label: 'Mật ong', color: '#c98e5b' },
+  { label: 'Nâu ấm', color: '#9c643c' },
+  { label: 'Pastel', color: '#e2d4f0' },
+];
+
+export const HAIR_STYLES: { id: HairStyleId; label: string }[] = [
+  { id: 'short', label: 'Tóc ngắn' },
+  { id: 'bob', label: 'Tóc bob' },
+  { id: 'ponytail', label: 'Đuôi ngựa' },
+  { id: 'spiky', label: 'Tóc dựng' },
+  { id: 'bun', label: 'Búi củ tỏi' },
+  { id: 'long', label: 'Tóc dài' },
+  { id: 'none', label: 'Tối giản' },
+];
+
+export const HAIR_COLORS: string[] = [
+  '#272026', // Đen than
+  '#5c3a21', // Nâu hạt dẻ
+  '#c48a47', // Vàng mật ong
+  '#f472b6', // Hồng pastel
+  '#a78bfa', // Tím lavender
+  '#38bdf8', // Xanh băng
+  '#34d399', // Xanh mint
+  '#e2e8f0', // Bạch kim
+  '#be123c', // Đỏ rượu
+];
+
+export const EYE_STYLES: { id: EyeStyleId; label: string }[] = [
+  { id: 'cute', label: 'Tròn cute' },
+  { id: 'happy', label: 'Mắt cười' },
+  { id: 'cool', label: 'Ngầu' },
+  { id: 'sleepy', label: 'Buồn ngủ' },
+  { id: 'wink', label: 'Nháy mắt' },
+];
+
+export const TOP_STYLES: { id: TopStyleId; label: string }[] = [
+  { id: 'hoodie', label: 'Hoodie' },
+  { id: 'tshirt', label: 'Áo phông' },
+  { id: 'sweater', label: 'Áo len' },
+  { id: 'cardigan', label: 'Cardigan' },
+  { id: 'dress', label: 'Váy liền' },
+];
+
+export const CLOTHING_COLORS: string[] = [
+  '#f472b6',
+  '#a78bfa',
+  '#38bdf8',
+  '#34d399',
+  '#fbbf24',
+  '#fb7185',
+  '#334155',
+  '#1e293b',
+  '#f8fafc',
+  '#7c2d12',
+];
+
+export const ACCESSORIES: { id: AccessoryId; label: string }[] = [
+  { id: 'none', label: 'Không' },
+  { id: 'headphones', label: 'Tai nghe' },
+  { id: 'cat_ears', label: 'Tai mèo' },
+  { id: 'cap', label: 'Mũ lưỡi trai' },
+  { id: 'beanie', label: 'Mũ len' },
+  { id: 'glasses', label: 'Kính cận' },
+  { id: 'bow', label: 'Nơ xinh' },
+];
 
 export interface CharacterSkinMeta {
   id: OutfitId;
@@ -9,6 +101,7 @@ export interface CharacterSkinMeta {
 }
 
 export const ISO_CHARACTER_IDS: OutfitId[] = [
+  'custom',
   'c1',
   'c2',
   'c3',
@@ -24,6 +117,13 @@ export const ISO_CHARACTER_IDS: OutfitId[] = [
 ];
 
 export const CHARACTER_SKINS: CharacterSkinMeta[] = [
+  {
+    id: 'custom',
+    name: 'Tự Tạo Avatar',
+    subtitle: 'Tùy biến tóc, mắt, áo & phụ kiện',
+    avatar: '/sprites/characters/base/avatar.png',
+    isModularIso: true,
+  },
   {
     id: 'c7',
     name: 'Kaito',
@@ -135,8 +235,9 @@ export function getAllCharacterSpritePaths(): string[] {
   ];
 
   for (const cid of ISO_CHARACTER_IDS) {
+    const folder = cid === 'custom' ? 'base' : cid;
     for (const f of frameNames) {
-      paths.push(`/sprites/characters/${cid}/${f}.png`);
+      paths.push(`/sprites/characters/${folder}/${f}.png`);
     }
   }
   return paths;
@@ -154,7 +255,8 @@ export function resolveIsoCharacterFrame(
   const flipNorth = facing === 'ne';
   const flipSouth = facing === 'sw' || facing === 'left';
 
-  const baseDir = `/sprites/characters/${safeOutfit}`;
+  const folder = safeOutfit === 'custom' ? 'base' : safeOutfit;
+  const baseDir = `/sprites/characters/${folder}`;
 
   if (activity === 'focus_desk') {
     if (isNorthSide) {

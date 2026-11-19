@@ -7,6 +7,7 @@ import {
   createPersonalRoomLayout,
   getCatalogItem,
 } from '../shared/catalog';
+import { DEFAULT_CUSTOM_AVATAR } from '../shared/characters';
 import { soundEngine } from '../audio/soundEngine';
 import { useAuthStore } from './useAuthStore';
 import type {
@@ -15,6 +16,7 @@ import type {
   AudioMixerState,
   CatalogCategory,
   ChatMessage,
+  CustomAvatarConfig,
   FacingDirection,
   GhostPreview,
   LightingMode,
@@ -154,6 +156,7 @@ export interface GameStoreState {
   updateLocalProfile: (patch: {
     name?: string;
     outfit?: OutfitId;
+    customAvatar?: CustomAvatarConfig;
     tintColor?: string;
   }) => void;
   moveLocalPlayer: (patch: {
@@ -239,10 +242,12 @@ const hasExistingProfile = (() => {
 const savedProfile = loadJsonStorage<{
   name: string;
   outfit: OutfitId;
+  customAvatar?: CustomAvatarConfig;
   tintColor: string;
 }>('cozy_player_profile_v2', {
   name: 'Người chơi',
   outfit: 'c1',
+  customAvatar: DEFAULT_CUSTOM_AVATAR,
   tintColor: '#a78bfa',
 });
 
@@ -280,6 +285,7 @@ const initialLocalPlayer: PlayerState = {
   id: 'local-player',
   name: savedProfile.name,
   outfit: savedProfile.outfit,
+  customAvatar: savedProfile.customAvatar || DEFAULT_CUSTOM_AVATAR,
   tintColor: savedProfile.tintColor,
   gx: 4.5,
   gy: 5.5,
@@ -637,6 +643,7 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
     saveJsonStorage('cozy_player_profile_v2', {
       name: nextLocal.name,
       outfit: nextLocal.outfit,
+      customAvatar: nextLocal.customAvatar,
       tintColor: nextLocal.tintColor,
     });
     set((s) => ({

@@ -585,6 +585,7 @@ io.on('connection', (socket) => {
         id: socket.id,
         name: (payload.player?.name === 'Kaito' ? 'Người chơi' : (payload.player?.name || 'Khách')).slice(0, 24),
         outfit: payload.player?.outfit || 'c7',
+        customAvatar: payload.player?.customAvatar,
         tintColor: payload.player?.tintColor || '#a78bfa',
         gx: payload.player?.gx ?? 4.5,
         gy: payload.player?.gy ?? 5.5,

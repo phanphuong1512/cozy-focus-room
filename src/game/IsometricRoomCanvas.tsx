@@ -24,10 +24,15 @@ import {
   mirrorFacingDirection,
 } from '../shared/footprint';
 import {
+  DEFAULT_CUSTOM_AVATAR,
   getAllCharacterSpritePaths,
   isIsoCharacter,
   resolveIsoCharacterFrame,
 } from '../shared/characters';
+import {
+  parseFrameContext,
+  renderCustomAvatarToCanvas,
+} from '../shared/avatarRenderer';
 import { useGameStore } from '../store/useGameStore';
 import { soundEngine } from '../audio/soundEngine';
 import type {
@@ -224,12 +229,17 @@ export const IsometricRoomCanvas: React.FC = () => {
     };
 
     const textureMap = new Map<string, Texture>();
+    const baseImageMap = new Map<string, HTMLImageElement>();
+    const customAvatarTexCache = new Map<string, Texture>();
 
     const loadSingleTexture = (url: string): Promise<Texture> => {
       return new Promise((resolve) => {
         const img = new Image();
         img.onload = () => {
           try {
+            if (url.includes('/sprites/characters/base/')) {
+              baseImageMap.set(url, img);
+            }
             const tex = Texture.from(img);
             tex.source.style.scaleMode = 'nearest';
             resolve(tex);
@@ -242,6 +252,9 @@ export const IsometricRoomCanvas: React.FC = () => {
           const fallbackImg = new Image();
           fallbackImg.onload = () => {
             try {
+              if (url.includes('/sprites/characters/base/')) {
+                baseImageMap.set(url, fallbackImg);
+              }
               const tex = Texture.from(fallbackImg);
               tex.source.style.scaleMode = 'nearest';
               resolve(tex);
@@ -1803,7 +1816,27 @@ export const IsometricRoomCanvas: React.FC = () => {
             Math.floor(vis.walkPhase)
           );
           const flipX = resolved.flipX ? -1 : 1;
-          vis.sprite.texture = getTex(resolved.path);
+          if (player.outfit === 'custom') {
+            const cfg = player.customAvatar || DEFAULT_CUSTOM_AVATAR;
+            const cacheKey = `${resolved.path}|${JSON.stringify(cfg)}`;
+            let customTex = customAvatarTexCache.get(cacheKey);
+            if (!customTex) {
+              const baseImg = baseImageMap.get(resolved.path);
+              if (baseImg) {
+                const canvasEl = renderCustomAvatarToCanvas(
+                  baseImg,
+                  cfg,
+                  parseFrameContext(resolved.path)
+                );
+                customTex = Texture.from(canvasEl);
+                customTex.source.style.scaleMode = 'nearest';
+                customAvatarTexCache.set(cacheKey, customTex);
+              }
+            }
+            vis.sprite.texture = customTex || getTex(resolved.path);
+          } else {
+            vis.sprite.texture = getTex(resolved.path);
+          }
 
           if (player.isMoving) {
             const stepBob = 1 + Math.abs(Math.sin(vis.walkPhase * Math.PI * 0.5)) * 0.025;

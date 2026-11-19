@@ -1,11 +1,20 @@
-import React, { useEffect, useState } from 'react';
-import { Crown, DoorOpen, RotateCw, Sparkles, Users, X } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Crown, DoorOpen, RotateCw, Shuffle, Sparkles, Users, X } from 'lucide-react';
 import {
+  ACCESSORIES,
   CHARACTER_SKINS,
+  CLOTHING_COLORS,
+  DEFAULT_CUSTOM_AVATAR,
+  EYE_STYLES,
+  HAIR_COLORS,
+  HAIR_STYLES,
+  SKIN_TONES,
+  TOP_STYLES,
   resolveIsoCharacterFrame,
 } from '../shared/characters';
+import { parseFrameContext, renderCustomAvatarToCanvas } from '../shared/avatarRenderer';
 import { useGameStore } from '../store/useGameStore';
-import type { ActivityType, FacingDirection, OutfitId } from '../shared/types';
+import type { ActivityType, CustomAvatarConfig, FacingDirection, OutfitId } from '../shared/types';
 
 const COLORS = [
   '#f472b6',
@@ -55,22 +64,35 @@ export const RoomAndProfileModals: React.FC = () => {
   const [targetRoom, setTargetRoom] = useState(roomCode);
   const [draftName, setDraftName] = useState(localPlayer.name);
   const [draftOutfit, setDraftOutfit] = useState<OutfitId>(localPlayer.outfit);
+  const [draftCustomAvatar, setDraftCustomAvatar] = useState<CustomAvatarConfig>(
+    localPlayer.customAvatar || DEFAULT_CUSTOM_AVATAR
+  );
+  const [customTab, setCustomTab] = useState<'face' | 'hair' | 'outfit' | 'acc'>('hair');
   const [draftColor, setDraftColor] = useState(localPlayer.tintColor);
   const [draftRoom, setDraftRoom] = useState(roomCode);
 
   const [previewTab, setPreviewTab] = useState<PreviewTabId>('idle');
   const [facingIdx, setFacingIdx] = useState(0);
   const [walkFrame, setWalkFrame] = useState(0);
+  const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Sync draft values whenever profile modal opens
   useEffect(() => {
     if (showProfileModal) {
       setDraftName(localPlayer.name);
       setDraftOutfit(localPlayer.outfit);
+      setDraftCustomAvatar(localPlayer.customAvatar || DEFAULT_CUSTOM_AVATAR);
       setDraftColor(localPlayer.tintColor);
       setDraftRoom(roomCode);
     }
-  }, [showProfileModal, localPlayer.name, localPlayer.outfit, localPlayer.tintColor, roomCode]);
+  }, [
+    showProfileModal,
+    localPlayer.name,
+    localPlayer.outfit,
+    localPlayer.customAvatar,
+    localPlayer.tintColor,
+    roomCode,
+  ]);
 
   useEffect(() => {
     if (showRoomModal) {
@@ -99,6 +121,7 @@ export const RoomAndProfileModals: React.FC = () => {
     updateLocalProfile({
       name: draftName.trim() || 'Người chơi',
       outfit: draftOutfit,
+      customAvatar: draftCustomAvatar,
       tintColor: draftColor,
     });
     const cleanRoom = draftRoom.trim().toUpperCase().slice(0, 16);
@@ -106,6 +129,22 @@ export const RoomAndProfileModals: React.FC = () => {
       joinRoom(cleanRoom);
     }
     setShowProfileModal(false);
+  };
+
+  const handleRandomizeCustomAvatar = () => {
+    const pick = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+    setDraftCustomAvatar({
+      skinTone: pick(SKIN_TONES).color,
+      hairStyle: pick(HAIR_STYLES).id,
+      hairColor: pick(HAIR_COLORS),
+      eyeStyle: pick(EYE_STYLES).id,
+      blush: Math.random() > 0.3,
+      topStyle: pick(TOP_STYLES).id,
+      topColor: pick(CLOTHING_COLORS),
+      bottomColor: pick(CLOTHING_COLORS),
+      shoeColor: pick(CLOTHING_COLORS),
+      accessory: pick(ACCESSORIES).id,
+    });
   };
 
   const activeFacing = PREVIEW_FACINGS[facingIdx];
@@ -116,6 +155,26 @@ export const RoomAndProfileModals: React.FC = () => {
     previewTab === 'walking',
     walkFrame
   );
+
+  // Render live composite canvas preview when custom avatar is selected
+  useEffect(() => {
+    if (!showProfileModal || draftOutfit !== 'custom') return;
+    let cancelled = false;
+    const img = new Image();
+    img.onload = () => {
+      if (cancelled || !previewCanvasRef.current) return;
+      renderCustomAvatarToCanvas(
+        img,
+        draftCustomAvatar,
+        parseFrameContext(resolvedPreview.path),
+        previewCanvasRef.current
+      );
+    };
+    img.src = resolvedPreview.path;
+    return () => {
+      cancelled = true;
+    };
+  }, [showProfileModal, draftOutfit, draftCustomAvatar, resolvedPreview.path]);
 
   const selectedSkin = CHARACTER_SKINS.find((c) => c.id === draftOutfit);
 
@@ -309,15 +368,28 @@ export const RoomAndProfileModals: React.FC = () => {
                   >
                     {draftName.trim() || 'Người chơi'}
                   </div>
-                  <img
-                    src={resolvedPreview.path}
-                    alt={selectedSkin?.name || 'Preview'}
-                    className="h-32 object-contain drop-shadow-[0_10px_14px_rgba(0,0,0,0.6)]"
-                    style={{
-                      imageRendering: 'pixelated',
-                      transform: resolvedPreview.flipX ? 'scaleX(-1)' : 'none',
-                    }}
-                  />
+                  {draftOutfit === 'custom' ? (
+                    <canvas
+                      ref={previewCanvasRef}
+                      width={180}
+                      height={240}
+                      className="h-32 w-auto object-contain drop-shadow-[0_10px_14px_rgba(0,0,0,0.6)]"
+                      style={{
+                        imageRendering: 'pixelated',
+                        transform: resolvedPreview.flipX ? 'scaleX(-1)' : 'none',
+                      }}
+                    />
+                  ) : (
+                    <img
+                      src={resolvedPreview.path}
+                      alt={selectedSkin?.name || 'Preview'}
+                      className="h-32 object-contain drop-shadow-[0_10px_14px_rgba(0,0,0,0.6)]"
+                      style={{
+                        imageRendering: 'pixelated',
+                        transform: resolvedPreview.flipX ? 'scaleX(-1)' : 'none',
+                      }}
+                    />
+                  )}
                   <div className="w-24 h-6 -mt-3 rounded-full bg-pink-500/20 border border-pink-300/30" />
                 </div>
 
@@ -335,13 +407,13 @@ export const RoomAndProfileModals: React.FC = () => {
                 </div>
               </div>
 
-              {/* Right Column: Character Selector + Name + Color + Room */}
-              <div className="md:col-span-7 flex flex-col justify-between gap-4">
+              {/* Right Column: Character Selector + Custom Studio + Name + Color + Room */}
+              <div className="md:col-span-7 flex flex-col justify-between gap-3.5">
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-2">
                     1. Chọn Nhân Vật Isometric ({CHARACTER_SKINS.length} nhân vật):
                   </label>
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-56 overflow-y-auto pr-1 cozy-scroll">
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-40 overflow-y-auto pr-1 cozy-scroll">
                     {CHARACTER_SKINS.map((skin) => {
                       const active = draftOutfit === skin.id;
                       return (
@@ -358,10 +430,10 @@ export const RoomAndProfileModals: React.FC = () => {
                           <img
                             src={skin.avatar}
                             alt={skin.name}
-                            className="w-12 h-12 rounded-xl object-cover bg-white/10"
+                            className="w-11 h-11 rounded-xl object-cover bg-white/10"
                             style={{ imageRendering: 'pixelated' }}
                           />
-                          <span className="mt-1.5 text-xs font-bold text-white">
+                          <span className="mt-1 text-[11px] font-bold text-white leading-tight">
                             {skin.name}
                           </span>
                           <span className="text-[9px] text-slate-400 leading-tight line-clamp-1">
@@ -372,6 +444,220 @@ export const RoomAndProfileModals: React.FC = () => {
                     })}
                   </div>
                 </div>
+
+                {/* Custom Avatar Creator Studio */}
+                {draftOutfit === 'custom' && (
+                  <div className="rounded-2xl bg-white/5 border border-pink-400/30 p-3 space-y-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-1">
+                        {(
+                          [
+                            { id: 'hair', label: 'Tóc' },
+                            { id: 'face', label: 'Da & Mắt' },
+                            { id: 'outfit', label: 'Áo & Quần' },
+                            { id: 'acc', label: 'Phụ kiện' },
+                          ] as const
+                        ).map((t) => (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => setCustomTab(t.id)}
+                            className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
+                              customTab === t.id
+                                ? 'bg-pink-500 text-white shadow'
+                                : 'bg-white/8 text-slate-300 hover:bg-white/15'
+                            }`}
+                          >
+                            {t.label}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRandomizeCustomAvatar}
+                        className="flex items-center gap-1 rounded-lg bg-violet-500/25 hover:bg-violet-500/40 border border-violet-400/30 px-2.5 py-1 text-[11px] font-semibold text-violet-100 transition"
+                      >
+                        <Shuffle className="w-3 h-3" /> Ngẫu nhiên
+                      </button>
+                    </div>
+
+                    {customTab === 'hair' && (
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap gap-1.5">
+                          {HAIR_STYLES.map((hs) => (
+                            <button
+                              key={hs.id}
+                              type="button"
+                              onClick={() =>
+                                setDraftCustomAvatar((c) => ({ ...c, hairStyle: hs.id }))
+                              }
+                              className={`rounded-lg px-2 py-1 text-[11px] border transition ${
+                                draftCustomAvatar.hairStyle === hs.id
+                                  ? 'bg-pink-500/30 border-pink-400 text-white font-semibold'
+                                  : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                              }`}
+                            >
+                              {hs.label}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-[10px] text-slate-400 mr-1">Màu tóc:</span>
+                          {HAIR_COLORS.map((col) => (
+                            <button
+                              key={col}
+                              type="button"
+                              onClick={() =>
+                                setDraftCustomAvatar((c) => ({ ...c, hairColor: col }))
+                              }
+                              className={`w-5 h-5 rounded-full border-2 transition ${
+                                draftCustomAvatar.hairColor === col
+                                  ? 'border-white scale-110'
+                                  : 'border-transparent opacity-80 hover:opacity-100'
+                              }`}
+                              style={{ backgroundColor: col }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {customTab === 'face' && (
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-[10px] text-slate-400 mr-1">Màu da:</span>
+                          {SKIN_TONES.map((st) => (
+                            <button
+                              key={st.color}
+                              type="button"
+                              title={st.label}
+                              onClick={() =>
+                                setDraftCustomAvatar((c) => ({ ...c, skinTone: st.color }))
+                              }
+                              className={`w-5 h-5 rounded-full border-2 transition ${
+                                draftCustomAvatar.skinTone === st.color
+                                  ? 'border-white scale-110'
+                                  : 'border-transparent opacity-80 hover:opacity-100'
+                              }`}
+                              style={{ backgroundColor: st.color }}
+                            />
+                          ))}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {EYE_STYLES.map((es) => (
+                            <button
+                              key={es.id}
+                              type="button"
+                              onClick={() =>
+                                setDraftCustomAvatar((c) => ({ ...c, eyeStyle: es.id }))
+                              }
+                              className={`rounded-lg px-2 py-1 text-[11px] border transition ${
+                                draftCustomAvatar.eyeStyle === es.id
+                                  ? 'bg-pink-500/30 border-pink-400 text-white font-semibold'
+                                  : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                              }`}
+                            >
+                              {es.label}
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setDraftCustomAvatar((c) => ({ ...c, blush: !c.blush }))
+                            }
+                            className={`rounded-lg px-2 py-1 text-[11px] border transition ${
+                              draftCustomAvatar.blush
+                                ? 'bg-rose-500/30 border-rose-400 text-rose-100 font-semibold'
+                                : 'bg-white/5 border-white/10 text-slate-400'
+                            }`}
+                          >
+                            Má hồng
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {customTab === 'outfit' && (
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap gap-1.5">
+                          {TOP_STYLES.map((ts) => (
+                            <button
+                              key={ts.id}
+                              type="button"
+                              onClick={() =>
+                                setDraftCustomAvatar((c) => ({ ...c, topStyle: ts.id }))
+                              }
+                              className={`rounded-lg px-2 py-1 text-[11px] border transition ${
+                                draftCustomAvatar.topStyle === ts.id
+                                  ? 'bg-pink-500/30 border-pink-400 text-white font-semibold'
+                                  : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                              }`}
+                            >
+                              {ts.label}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-[10px] text-slate-400 mr-1">Áo:</span>
+                          {CLOTHING_COLORS.map((col) => (
+                            <button
+                              key={`top_${col}`}
+                              type="button"
+                              onClick={() =>
+                                setDraftCustomAvatar((c) => ({ ...c, topColor: col }))
+                              }
+                              className={`w-4 h-4 rounded-full border-2 transition ${
+                                draftCustomAvatar.topColor === col
+                                  ? 'border-white scale-115'
+                                  : 'border-transparent opacity-80'
+                              }`}
+                              style={{ backgroundColor: col }}
+                            />
+                          ))}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-[10px] text-slate-400 mr-1">Quần:</span>
+                          {CLOTHING_COLORS.map((col) => (
+                            <button
+                              key={`bot_${col}`}
+                              type="button"
+                              onClick={() =>
+                                setDraftCustomAvatar((c) => ({ ...c, bottomColor: col }))
+                              }
+                              className={`w-4 h-4 rounded-full border-2 transition ${
+                                draftCustomAvatar.bottomColor === col
+                                  ? 'border-white scale-115'
+                                  : 'border-transparent opacity-80'
+                              }`}
+                              style={{ backgroundColor: col }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {customTab === 'acc' && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {ACCESSORIES.map((ac) => (
+                          <button
+                            key={ac.id}
+                            type="button"
+                            onClick={() =>
+                              setDraftCustomAvatar((c) => ({ ...c, accessory: ac.id }))
+                            }
+                            className={`rounded-lg px-2.5 py-1 text-[11px] border transition ${
+                              draftCustomAvatar.accessory === ac.id
+                                ? 'bg-pink-500/30 border-pink-400 text-white font-semibold'
+                                : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                            }`}
+                          >
+                            {ac.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>

@@ -35,7 +35,43 @@ export type OutfitId =
   | 'c9'
   | 'c10'
   | 'c11'
-  | 'c12';
+  | 'c12'
+  | 'custom';
+
+export type HairStyleId =
+  | 'none'
+  | 'short'
+  | 'bob'
+  | 'ponytail'
+  | 'spiky'
+  | 'bun'
+  | 'long';
+
+export type EyeStyleId = 'cute' | 'happy' | 'cool' | 'sleepy' | 'wink';
+
+export type TopStyleId = 'tshirt' | 'hoodie' | 'sweater' | 'dress' | 'cardigan';
+
+export type AccessoryId =
+  | 'none'
+  | 'headphones'
+  | 'cat_ears'
+  | 'cap'
+  | 'beanie'
+  | 'glasses'
+  | 'bow';
+
+export interface CustomAvatarConfig {
+  skinTone: string;
+  hairStyle: HairStyleId;
+  hairColor: string;
+  eyeStyle: EyeStyleId;
+  blush: boolean;
+  topStyle: TopStyleId;
+  topColor: string;
+  bottomColor: string;
+  shoeColor: string;
+  accessory: AccessoryId;
+}
 
 export type WallTheme = 'cream' | 'lofi_purple' | 'sage' | 'brick';
 
@@ -136,6 +172,7 @@ export interface PlayerState {
   id: string;
   name: string;
   outfit: OutfitId;
+  customAvatar?: CustomAvatarConfig;
   tintColor: string;
   gx: number;
   gy: number;
