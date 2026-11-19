@@ -247,4 +247,20 @@ jobs:
           '
 
           gh release upload "$TAG" latest.json --repo "$GITHUB_REPOSITORY" --clobber
-          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          
+          NOTES="### 🎮 Tải Cozy Focus Room cho máy của bạn
+
+| Hệ điều hành | File cài đặt (Bấm tải trực tiếp) | Mô tả |
+| :--- | :--- | :--- |
+| 🍎 **macOS** | [**Tải file .DMG**](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/Cozy.Focus.Room_${VERSION}_universal.dmg) | Dành cho máy Mac (chạy mượt trên cả Apple Silicon M1-M4 & Intel) |
+| 🪟 **Windows** | [**Tải file .EXE**](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/Cozy.Focus.Room_${VERSION}_x64-setup.exe) | Bộ cài đặt thông dụng cho Windows 10/11 |
+| 🏢 **Windows (MSI)** | [Tải file .MSI](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/Cozy.Focus.Room_${VERSION}_x64_en-US.msi) | Bản cài đặt gói MSI cho quản trị viên |
+
+---
+
+> 💡 **Lưu ý:** Các file còn lại (\`.tar.gz\`, \`.sig\`, \`latest.json\`) là file hệ thống dành riêng cho tính năng **Tự động Cập nhật ngầm (Auto-Updater)** của game, người dùng không cần tải thủ công.
+
+#### 📝 Ghi chú phát hành:
+$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body -q .body)"
+
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes "$NOTES" --draft=false --latest

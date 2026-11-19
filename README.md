@@ -1,61 +1,34 @@
-# Căn Phòng Kỷ Niệm 💕 - Game KAPLAY Dành Tặng Người Yêu
+# Cozy Focus Room ☕🎧
 
-Một tựa game 2D Cozy Puzzle nhỏ nhắn, ấm cúng và đầy ngọt ngào được xây dựng bằng **KAPLAY** và **Vite**.
-
----
-
-## 🎮 Cách Chơi
-
-* **Điều khiển:**
-  * **Máy tính:** Dùng các phím mũi tên hoặc `W`, `A`, `S`, `D` để di chuyển. Nhấn `Space` hoặc `E` để tương tác khi lại gần đồ vật.
-  * **Điện thoại:** Sử dụng cụm phím ảo D-Pad ở góc trái và nút ❤️ `[E]` ở góc phải.
-* **Mục tiêu:**
-  * Khám phá căn phòng và giải **3 câu đố tình yêu** để thu thập đủ 3 chiếc chìa khóa:
-    1. 🕯️ **Chìa khóa Đỏ:** Thắp sáng ngọn nến thơm và trả lời câu hỏi trắc nghiệm ngọt ngào.
-    2. 📺 **Chìa khóa Vàng:** Bật chiếc TV hoài niệm và nhập mã số tình yêu (mặc định: `1314`).
-    3. 🪴 **Chìa khóa Xanh:** Đẩy chậu cây mầm xanh vào vị trí đánh dấu giữa tấm thảm ấm áp.
-  * Mở chiếc **Hộp Quà Kỷ Niệm 🎁** ở góc phòng để mở khóa **Bức Thư Tình Bí Mật** kèm **3 Voucher Tình Yêu**!
+Game Desktop kết hợp Pomodoro, Lo-fi chill và trang trí phòng Isometric nhiều người chơi trực tuyến (Multiplayer).
 
 ---
 
-## ✏️ Tùy Chỉnh Nội Dung Dễ Dàng (Trong file `src/config.js`)
+## 📥 Tải Game Cài Đặt (Download)
 
-Mọi câu chữ trong game đã được thiết kế để bạn có thể cá nhân hóa 100% chỉ trong 1 phút:
+Bạn chỉ cần chọn đúng 1 file theo hệ điều hành máy tính của mình:
 
-1. **Tên / Biệt danh của 2 bạn:**
-   ```js
-   senderName: "Anh",
-   receiverName: "Em Bé",
-   ```
-2. **Câu đố Nến thơm (Câu hỏi & Đáp án):**
-   ```js
-   puzzle1: {
-     question: "Khi ở bên cạnh em, điều gì làm anh cảm thấy hạnh phúc nhất?",
-     options: [ ... ],
-     correctAnswerIndex: 2,
-   }
-   ```
-3. **Mã số bí mật TV (Ngày kỷ niệm, ngày sinh nhật,...):**
-   ```js
-   puzzle2: {
-     passcode: "1314", // Bạn có thể đổi thành ngày kỷ niệm, ví dụ "2010"
-   }
-   ```
-4. **Nội dung Bức Thư Tình & Các Phiếu Quà Tặng (Vouchers):**
-   Chỉnh sửa các đoạn văn trong `loveLetter.paragraphs` và `loveLetter.vouchers`.
+| Hệ điều hành | File tải về | Dung lượng | Hướng dẫn cài |
+| :--- | :--- | :--- | :--- |
+| 🍎 **macOS** | [**Cozy.Focus.Room_universal.dmg**](https://github.com/phanphuong1512/cozy-focus-room/releases/latest/download/Cozy.Focus.Room_1.0.3_universal.dmg) | ~32 MB | Mở file `.dmg` -> Kéo app vào thư mục `Applications` |
+| 🪟 **Windows** | [**Cozy.Focus.Room_x64-setup.exe**](https://github.com/phanphuong1512/cozy-focus-room/releases/latest/download/Cozy.Focus.Room_1.0.3_x64-setup.exe) | ~15 MB | Chạy file `.exe` -> Bấm Next để cài đặt |
+
+> 🔄 **Tự động Cập nhật:** Game đã tích hợp sẵn hệ thống Auto-Updater. Khi có bản cập nhật mới trên GitHub, app sẽ tự động thông báo và cập nhật.
 
 ---
 
-## 🚀 Khởi Chạy & Đóng Gói (Deploy)
+## ✨ Tính năng chính
 
-* **Chạy thử nghiệm (Dev Server):**
-  ```bash
-  npm run dev
-  ```
-  Truy cập: `http://localhost:5173/` (hoặc mở trên điện thoại cùng mạng Wi-Fi qua địa chỉ IP local).
+- 🛋️ **Multiplayer Room:** Cùng bạn bè vào chung một phòng, tương tác và trò chuyện qua Railway backend.
+- 📐 **Decor Studio & Isometric Grid:** Hệ thống lưới chuẩn xác, hỗ trợ cả bàn chữ L, tủ lạnh, thảm và xoay lật đồ vật.
+- 🧑‍🎨 **12 Nhân vật Modular:** Tùy biến trang phục, tóc, phụ kiện với sprite sheets hoạt ảnh mượt mà.
+- ⏱️ **Đồng hồ Pomodoro:** Chế độ tập trung học tập & làm việc cùng nhau.
+- 🎵 **Lo-fi Chill Radio:** Tuyển tập giai điệu thư giãn nhẹ nhàng.
 
-* **Đóng gói để xuất bản (Build):**
-  ```bash
-  npm run build
-  ```
-  Thư mục `dist/` đã sẵn sàng để bạn tải lên bất kỳ nền tảng miễn phí nào như **Vercel**, **Netlify**, hoặc **GitHub Pages** để tạo link web hoặc mã QR in lên thiệp tặng!
+---
+
+## 🛠️ Dành cho Nhà phát triển (Development)
+
+- **Client:** Vite + React + TypeScript + Tauri v2 (Rust)
+- **Backend:** Node.js + Express + Socket.IO + Railway
+- **CI/CD:** GitHub Actions tự động build Desktop cho macOS & Windows và xuất bản Release khi push code vào nhánh `main`.
