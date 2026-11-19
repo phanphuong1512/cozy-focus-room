@@ -953,21 +953,14 @@ export const IsometricRoomCanvas: React.FC = () => {
         const coords = toWorldGrid(e.clientX, e.clientY);
         const state = useGameStore.getState();
 
-        // Middle click or Alt+Left or Right click (outside floor paint erase) -> Pan camera
+        // Middle click, Alt+Left, or Right click -> Always pan camera (even in Decor mode)
         if (
           e.button === 1 ||
           (e.button === 0 && e.altKey) ||
-          (e.button === 2 && !(state.buildMode && state.activeFloorBrush))
+          e.button === 2
         ) {
           isPanning = true;
           panStart = { x: e.clientX - camPan.x, y: e.clientY - camPan.y };
-          return;
-        }
-
-        if (e.button === 2 && state.buildMode && state.activeFloorBrush) {
-          const tx = Math.floor(coords.gx);
-          const ty = Math.floor(coords.gy);
-          state.paintTile(tx, ty, '.');
           return;
         }
 
@@ -1488,6 +1481,33 @@ export const IsometricRoomCanvas: React.FC = () => {
                 ]);
                 hoverCursor.fill({ color: 0x38bdf8, alpha: 0.42 });
                 hoverCursor.stroke({ color: 0xe0f2fe, width: 2 });
+              } else if (target.layer === 'wall') {
+                const onLeftWall = isWallItemLeft(target.gx, target.gy, target.flipped);
+                for (const cell of target.cells) {
+                  const p0 = gridToScreen(cell.gx, cell.gy);
+                  const p1 = onLeftWall
+                    ? gridToScreen(cell.gx, cell.gy + 1)
+                    : gridToScreen(cell.gx + 1, cell.gy);
+                  hoverCursor.poly([
+                    p0.x,
+                    p0.y,
+                    p1.x,
+                    p1.y,
+                    p1.x,
+                    p1.y - WALL_HEIGHT,
+                    p0.x,
+                    p0.y - WALL_HEIGHT,
+                  ]);
+                  hoverCursor.fill({
+                    color: cell.valid ? 0x22c55e : 0xef4444,
+                    alpha: cell.valid ? 0.35 : 0.48,
+                  });
+                  hoverCursor.stroke({
+                    color: cell.valid ? 0x86efac : 0xfca5a5,
+                    width: 2.5,
+                    alpha: 0.95,
+                  });
+                }
               } else {
                 // Draw each occupied tile in the exact footprint shape (e.g. L-shape, 1x3, 2x1, 1x1)
                 for (const cell of target.cells) {
@@ -1539,21 +1559,38 @@ export const IsometricRoomCanvas: React.FC = () => {
               const hoveredCat = hoveredItem
                 ? getCatalogItem(hoveredItem.catalogId)
                 : undefined;
-              if (hoveredItem && hoveredCat && hoveredItem.layer !== 'surface') {
-                const cells =
-                  hoveredItem.layer === 'wall'
-                    ? getWallItemCells(
-                        hoveredCat,
-                        hoveredItem.gx,
-                        hoveredItem.gy,
-                        hoveredItem.flipped
-                      )
-                    : getItemOccupiedCells(
-                        hoveredCat,
-                        hoveredItem.gx,
-                        hoveredItem.gy,
-                        hoveredItem.flipped
-                      );
+              if (hoveredItem && hoveredCat && hoveredItem.layer === 'wall') {
+                const wallCells = getWallItemCells(
+                  hoveredCat,
+                  hoveredItem.gx,
+                  hoveredItem.gy,
+                  hoveredItem.flipped
+                );
+                for (const cell of wallCells) {
+                  const p0 = gridToScreen(cell.gx, cell.gy);
+                  const p1 = cell.onLeftWall
+                    ? gridToScreen(cell.gx, cell.gy + 1)
+                    : gridToScreen(cell.gx + 1, cell.gy);
+                  hoverCursor.poly([
+                    p0.x,
+                    p0.y,
+                    p1.x,
+                    p1.y,
+                    p1.x,
+                    p1.y - WALL_HEIGHT,
+                    p0.x,
+                    p0.y - WALL_HEIGHT,
+                  ]);
+                  hoverCursor.fill({ color: 0x38bdf8, alpha: 0.25 });
+                  hoverCursor.stroke({ color: 0x7dd3fc, width: 2.5, alpha: 0.9 });
+                }
+              } else if (hoveredItem && hoveredCat && hoveredItem.layer !== 'surface') {
+                const cells = getItemOccupiedCells(
+                  hoveredCat,
+                  hoveredItem.gx,
+                  hoveredItem.gy,
+                  hoveredItem.flipped
+                );
                 for (const cell of cells) {
                   const pTop = gridToScreen(cell.gx, cell.gy);
                   const pRight = gridToScreen(cell.gx + 1, cell.gy);
