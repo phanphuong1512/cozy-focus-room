@@ -83,6 +83,7 @@ export interface CatalogItem {
   offsetY?: number;
   isSurface?: boolean;
   surfaceHeightPx?: number;
+  wallElevationPx?: number;
   seatSlots?: SeatSlot[];
   lightEmitter?: LightEmitterConfig;
   description?: string;
@@ -108,6 +109,7 @@ export interface RoomLayout {
   hostId: string;
   allowGuestBuild: boolean;
   floorMap: string[];
+  walls?: string[];
   wallTheme: WallTheme;
   lightingMode: LightingMode;
   rainEnabled: boolean;
@@ -115,6 +117,8 @@ export interface RoomLayout {
   isPersonal?: boolean;
   ownerUid?: string;
   maxItems?: number;
+  maxFloorTiles?: number;
+  maxWallTiles?: number;
 }
 
 export interface PlayerChatBubble {

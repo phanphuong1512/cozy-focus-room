@@ -69,6 +69,14 @@ interface PlacementTargetResult {
   cells: PlacementCellStatus[];
 }
 
+function isWallItemLeft(gx: number, gy: number, flipped: boolean): boolean {
+  const ox = Math.max(0, Math.floor(gx));
+  const oy = Math.max(0, Math.floor(gy));
+  if (ox === 0 && oy > 0) return true;
+  if (oy === 0 && ox > 0) return false;
+  return flipped;
+}
+
 function getWallItemCells(
   cat: CatalogItem,
   gx: number,
@@ -76,15 +84,15 @@ function getWallItemCells(
   flipped: boolean
 ): { gx: number; gy: number; onLeftWall: boolean }[] {
   const span = Math.max(1, cat.footprint.w);
-  const onLeftWall = gx < gy || (gx === gy && flipped);
+  const onLeftWall = isWallItemLeft(gx, gy, flipped);
   const ox = Math.max(0, Math.floor(gx));
   const oy = Math.max(0, Math.floor(gy));
   const cells: { gx: number; gy: number; onLeftWall: boolean }[] = [];
   for (let i = 0; i < span; i++) {
     cells.push(
       onLeftWall
-        ? { gx: 0, gy: oy + i, onLeftWall: true }
-        : { gx: ox + i, gy: 0, onLeftWall: false }
+        ? { gx: ox, gy: oy + i, onLeftWall: true }
+        : { gx: ox + i, gy: oy, onLeftWall: false }
     );
   }
   return cells;
@@ -108,15 +116,16 @@ function computeSpritePlacement(
   }
   if (layer === 'wall') {
     const span = Math.max(1, cat.footprint.w);
-    const onLeftWall = gx < gy || (gx === gy && flipped);
+    const onLeftWall = isWallItemLeft(gx, gy, flipped);
     const ox = Math.max(0, Math.floor(gx));
     const oy = Math.max(0, Math.floor(gy));
-    const anchorGx = onLeftWall ? 0.18 : ox + span / 2;
-    const anchorGy = onLeftWall ? oy + span / 2 : 0.18;
+    const anchorGx = onLeftWall ? ox + 0.08 : ox + span / 2;
+    const anchorGy = onLeftWall ? oy + span / 2 : oy + 0.08;
     const pos = gridToScreen(anchorGx, anchorGy);
+    const wallElev = elevationPx || cat.wallElevationPx || 75;
     return {
       x: pos.x,
-      y: pos.y - (elevationPx || 0),
+      y: pos.y - wallElev,
       depth: (anchorGx + anchorGy) * 100 - 5,
     };
   }
@@ -401,10 +410,10 @@ export const IsometricRoomCanvas: React.FC = () => {
         }
         renderedItems = [];
 
-        // Remove old furniture shadow graphics tagged with label
+        // Remove old furniture shadow & wall segment graphics tagged with label
         for (let i = sortLayer.children.length - 1; i >= 0; i--) {
           const c = sortLayer.children[i];
-          if (c.label === 'item_shadow') {
+          if (c.label === 'item_shadow' || c.label === 'wall_segment') {
             sortLayer.removeChild(c);
             c.destroy();
           }
@@ -414,50 +423,95 @@ export const IsometricRoomCanvas: React.FC = () => {
         const W = Math.max(...layout.floorMap.map((r) => r.length));
         const palette = WALL_PALETTES[layout.wallTheme] || WALL_PALETTES.lofi_purple;
 
-        // 1. Back Walls (Left Wall along gx=0, Right Wall along gy=0)
-        const wallsG = new Graphics();
-        const cornerTop = gridToScreen(0, 0);
-        const cornerLeft = gridToScreen(0, H);
-        const cornerRight = gridToScreen(W, 0);
+        // 1. Back Walls (Per-segment custom walls if defined, otherwise full outer walls)
+        if (Array.isArray(layout.walls)) {
+          for (const wKey of layout.walls) {
+            const [side, coords] = wKey.split(':');
+            if (!coords) continue;
+            const [sx, sy] = coords.split(',').map(Number);
+            if (!Number.isFinite(sx) || !Number.isFinite(sy)) continue;
 
-        // Left wall polygon
-        wallsG.poly([
-          cornerTop.x,
-          cornerTop.y,
-          cornerLeft.x,
-          cornerLeft.y,
-          cornerLeft.x,
-          cornerLeft.y - WALL_HEIGHT,
-          cornerTop.x,
-          cornerTop.y - WALL_HEIGHT,
-        ]);
-        wallsG.fill({ color: palette.left });
+            const isLeft = side === 'L';
+            const p0 = gridToScreen(sx, sy);
+            const p1 = isLeft ? gridToScreen(sx, sy + 1) : gridToScreen(sx + 1, sy);
 
-        // Right wall polygon
-        wallsG.poly([
-          cornerTop.x,
-          cornerTop.y,
-          cornerRight.x,
-          cornerRight.y,
-          cornerRight.x,
-          cornerRight.y - WALL_HEIGHT,
-          cornerTop.x,
-          cornerTop.y - WALL_HEIGHT,
-        ]);
-        wallsG.fill({ color: palette.right });
+            const wg = new Graphics();
+            wg.label = 'wall_segment';
+            wg.poly([
+              p0.x,
+              p0.y,
+              p1.x,
+              p1.y,
+              p1.x,
+              p1.y - WALL_HEIGHT,
+              p0.x,
+              p0.y - WALL_HEIGHT,
+            ]);
+            wg.fill({ color: isLeft ? palette.left : palette.right });
 
-        // Top molding trim & baseboard
-        wallsG.moveTo(cornerLeft.x, cornerLeft.y - WALL_HEIGHT);
-        wallsG.lineTo(cornerTop.x, cornerTop.y - WALL_HEIGHT);
-        wallsG.lineTo(cornerRight.x, cornerRight.y - WALL_HEIGHT);
-        wallsG.stroke({ color: palette.trim, width: 6 });
+            // Top molding trim
+            wg.moveTo(p0.x, p0.y - WALL_HEIGHT);
+            wg.lineTo(p1.x, p1.y - WALL_HEIGHT);
+            wg.stroke({ color: palette.trim, width: 5 });
 
-        wallsG.moveTo(cornerLeft.x, cornerLeft.y - 10);
-        wallsG.lineTo(cornerTop.x, cornerTop.y - 10);
-        wallsG.lineTo(cornerRight.x, cornerRight.y - 10);
-        wallsG.stroke({ color: palette.base, width: 8, alpha: 0.7 });
+            // Baseboard
+            wg.moveTo(p0.x, p0.y - 6);
+            wg.lineTo(p1.x, p1.y - 6);
+            wg.stroke({ color: palette.base, width: 7, alpha: 0.75 });
 
-        backdropLayer.addChild(wallsG);
+            // Subtle seam line
+            wg.moveTo(p0.x, p0.y);
+            wg.lineTo(p0.x, p0.y - WALL_HEIGHT);
+            wg.stroke({ color: 0x000000, width: 1, alpha: 0.14 });
+
+            wg.zIndex = (sx + sy + 0.5) * 100 - 15;
+            sortLayer.addChild(wg);
+          }
+        } else {
+          const wallsG = new Graphics();
+          const cornerTop = gridToScreen(0, 0);
+          const cornerLeft = gridToScreen(0, H);
+          const cornerRight = gridToScreen(W, 0);
+
+          // Left wall polygon
+          wallsG.poly([
+            cornerTop.x,
+            cornerTop.y,
+            cornerLeft.x,
+            cornerLeft.y,
+            cornerLeft.x,
+            cornerLeft.y - WALL_HEIGHT,
+            cornerTop.x,
+            cornerTop.y - WALL_HEIGHT,
+          ]);
+          wallsG.fill({ color: palette.left });
+
+          // Right wall polygon
+          wallsG.poly([
+            cornerTop.x,
+            cornerTop.y,
+            cornerRight.x,
+            cornerRight.y,
+            cornerRight.x,
+            cornerRight.y - WALL_HEIGHT,
+            cornerTop.x,
+            cornerTop.y - WALL_HEIGHT,
+          ]);
+          wallsG.fill({ color: palette.right });
+
+          // Top molding trim & baseboard
+          wallsG.moveTo(cornerLeft.x, cornerLeft.y - WALL_HEIGHT);
+          wallsG.lineTo(cornerTop.x, cornerTop.y - WALL_HEIGHT);
+          wallsG.lineTo(cornerRight.x, cornerRight.y - WALL_HEIGHT);
+          wallsG.stroke({ color: palette.trim, width: 6 });
+
+          wallsG.moveTo(cornerLeft.x, cornerLeft.y - 10);
+          wallsG.lineTo(cornerTop.x, cornerTop.y - 10);
+          wallsG.lineTo(cornerRight.x, cornerRight.y - 10);
+          wallsG.stroke({ color: palette.base, width: 8, alpha: 0.7 });
+
+          backdropLayer.addChild(wallsG);
+        }
 
         // 2. Floor Tiles & 3D Diorama Slab
         const slabG = new Graphics();
@@ -750,6 +804,50 @@ export const IsometricRoomCanvas: React.FC = () => {
 
         if (cat.placement === 'wall') {
           const span = Math.max(1, cat.footprint.w);
+          const customWalls = state.layout.walls;
+
+          if (Array.isArray(customWalls)) {
+            const wallSet = new Set(customWalls);
+            const ix = Math.max(0, Math.min(W - 1, Math.floor(gx)));
+            const iy = Math.max(0, Math.min(H - 1, Math.floor(gy)));
+            const fracX = gx - ix;
+            const fracY = gy - iy;
+            let attachLeftWall = flipped ? fracY < fracX : fracX <= fracY;
+            if (attachLeftWall && !wallSet.has(`L:${ix},${iy}`) && wallSet.has(`R:${ix},${iy}`)) {
+              attachLeftWall = false;
+            } else if (!attachLeftWall && !wallSet.has(`R:${ix},${iy}`) && wallSet.has(`L:${ix},${iy}`)) {
+              attachLeftWall = true;
+            }
+
+            const originGx = attachLeftWall ? ix : Math.max(0, Math.min(W - span, ix));
+            const originGy = attachLeftWall ? Math.max(0, Math.min(H - span, iy)) : iy;
+
+            const cells: PlacementCellStatus[] = [];
+            for (let i = 0; i < span; i++) {
+              const cx = attachLeftWall ? originGx : originGx + i;
+              const cy = attachLeftWall ? originGy + i : originGy;
+              const key = attachLeftWall ? `L:${cx},${cy}` : `R:${cx},${cy}`;
+              cells.push({ gx: cx, gy: cy, valid: wallSet.has(key) });
+            }
+
+            const allValid = cells.every((c) => c.valid);
+            return {
+              gx: originGx,
+              gy: originGy,
+              flipped: attachLeftWall,
+              layer: 'wall',
+              parentSurfaceUid: undefined,
+              elevationPx: cat.wallElevationPx ?? 75,
+              valid: allValid,
+              hint: allValid
+                ? attachLeftWall
+                  ? `Treo tường Trái (${span} ô) — [R] xoay`
+                  : `Treo tường Phải (${span} ô) — [R] xoay`
+                : '⚠️ Hãy rê vào ô đã dựng tường để treo đồ',
+              cells,
+            };
+          }
+
           const attachLeftWall = gx <= gy;
           const originGx = attachLeftWall
             ? 0
@@ -773,7 +871,7 @@ export const IsometricRoomCanvas: React.FC = () => {
             flipped: attachLeftWall ? !flipped : flipped,
             layer: 'wall',
             parentSurfaceUid: undefined,
-            elevationPx: 75,
+            elevationPx: cat.wallElevationPx ?? 75,
             valid: allValid,
             hint: allValid
               ? attachLeftWall
@@ -885,6 +983,22 @@ export const IsometricRoomCanvas: React.FC = () => {
               Math.floor(coords.gy),
               state.activeFloorBrush
             );
+            return;
+          }
+
+          // 1b. Wall brush active
+          if (state.activeWallBrush) {
+            const H = state.layout.floorMap.length;
+            const W = Math.max(...state.layout.floorMap.map((r) => r.length));
+            const tx = Math.floor(coords.gx);
+            const ty = Math.floor(coords.gy);
+            if (tx >= 0 && tx < W && ty >= 0 && ty < H) {
+              const fracX = coords.gx - tx;
+              const fracY = coords.gy - ty;
+              const isLeft = state.placeFlipped ? fracY < fracX : fracX <= fracY;
+              const wallKey = `${isLeft ? 'L' : 'R'}:${tx},${ty}`;
+              state.toggleWallSegment(wallKey, state.activeWallBrush);
+            }
             return;
           }
 
@@ -1256,6 +1370,23 @@ export const IsometricRoomCanvas: React.FC = () => {
         const H = state.layout.floorMap.length;
         const W = Math.max(...state.layout.floorMap.map((r) => r.length));
 
+        if (state.buildMode && (state.activeFloorBrush || state.activeWallBrush)) {
+          // Faint wireframe grid over all WxH cells so empty '.' tiles are clearly visible
+          for (let gy = 0; gy <= H; gy++) {
+            const s = gridToScreen(0, gy);
+            const e = gridToScreen(W, gy);
+            hoverCursor.moveTo(s.x, s.y);
+            hoverCursor.lineTo(e.x, e.y);
+          }
+          for (let gx = 0; gx <= W; gx++) {
+            const s = gridToScreen(gx, 0);
+            const e = gridToScreen(gx, H);
+            hoverCursor.moveTo(s.x, s.y);
+            hoverCursor.lineTo(e.x, e.y);
+          }
+          hoverCursor.stroke({ color: 0xf472b6, width: 1, alpha: 0.16 });
+        }
+
         if (state.buildMode && hoverGrid) {
           const activeCatId = state.movingItemUid
             ? state.layout.items.find((i) => i.uid === state.movingItemUid)?.catalogId || null
@@ -1279,7 +1410,31 @@ export const IsometricRoomCanvas: React.FC = () => {
                 pLeft.x,
                 pLeft.y,
               ]);
-              hoverCursor.fill({ color: 0x38bdf8, alpha: 0.35 });
+              hoverCursor.fill({ color: state.activeFloorBrush === '.' ? 0xfb7185 : 0x38bdf8, alpha: 0.35 });
+              hoverCursor.stroke({ color: 0xffffff, width: 2, alpha: 0.9 });
+            }
+            localGhostSprite.visible = false;
+          } else if (state.activeWallBrush) {
+            const tx = Math.floor(hoverGrid.gx);
+            const ty = Math.floor(hoverGrid.gy);
+            if (tx >= 0 && tx < W && ty >= 0 && ty < H) {
+              const fracX = hoverGrid.gx - tx;
+              const fracY = hoverGrid.gy - ty;
+              const isLeft = state.placeFlipped ? fracY < fracX : fracX <= fracY;
+              const p0 = gridToScreen(tx, ty);
+              const p1 = isLeft ? gridToScreen(tx, ty + 1) : gridToScreen(tx + 1, ty);
+              hoverCursor.poly([
+                p0.x,
+                p0.y,
+                p1.x,
+                p1.y,
+                p1.x,
+                p1.y - WALL_HEIGHT,
+                p0.x,
+                p0.y - WALL_HEIGHT,
+              ]);
+              const isRemove = state.activeWallBrush === 'remove';
+              hoverCursor.fill({ color: isRemove ? 0xfb7185 : 0xa78bfa, alpha: 0.45 });
               hoverCursor.stroke({ color: 0xffffff, width: 2, alpha: 0.9 });
             }
             localGhostSprite.visible = false;

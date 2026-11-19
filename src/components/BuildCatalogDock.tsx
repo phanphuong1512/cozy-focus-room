@@ -8,7 +8,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { CATALOG_ITEMS, getCatalogItem } from '../shared/catalog';
+import { CATALOG_ITEMS, countFloorTiles, getCatalogItem } from '../shared/catalog';
 import { formatFootprintLabel } from '../shared/footprint';
 import { BuildTab, useGameStore } from '../store/useGameStore';
 import type { TileType, WallTheme } from '../shared/types';
@@ -40,6 +40,7 @@ export const BuildCatalogDock: React.FC = () => {
   const buildMode = useGameStore((s) => s.buildMode);
   const buildTab = useGameStore((s) => s.buildTab);
   const activeFloorBrush = useGameStore((s) => s.activeFloorBrush);
+  const activeWallBrush = useGameStore((s) => s.activeWallBrush);
   const selectedCatalogId = useGameStore((s) => s.selectedCatalogId);
   const movingItemUid = useGameStore((s) => s.movingItemUid);
   const placeFlipped = useGameStore((s) => s.placeFlipped);
@@ -49,6 +50,8 @@ export const BuildCatalogDock: React.FC = () => {
   const toggleBuildMode = useGameStore((s) => s.toggleBuildMode);
   const setBuildTab = useGameStore((s) => s.setBuildTab);
   const setActiveFloorBrush = useGameStore((s) => s.setActiveFloorBrush);
+  const setActiveWallBrush = useGameStore((s) => s.setActiveWallBrush);
+  const autoBuildWalls = useGameStore((s) => s.autoBuildWalls);
   const selectCatalogItem = useGameStore((s) => s.selectCatalogItem);
   const startMovingItem = useGameStore((s) => s.startMovingItem);
   const togglePlaceFlipped = useGameStore((s) => s.togglePlaceFlipped);
@@ -169,28 +172,97 @@ export const BuildCatalogDock: React.FC = () => {
 
       {/* Content Area */}
       {buildTab === 'floor' ? (
-        <div className="pt-3 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-2">
-            {FLOOR_BRUSHES.map((b) => (
+        <div className="pt-3 flex flex-col gap-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {FLOOR_BRUSHES.map((b) => (
+                <button
+                  key={b.id}
+                  onClick={() => setActiveFloorBrush(b.id)}
+                  className={`flex items-center gap-2 rounded-2xl px-2.5 py-1.5 text-left transition border ${
+                    activeFloorBrush === b.id
+                      ? 'bg-pink-500/25 border-pink-400 text-white shadow-md'
+                      : 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-200'
+                  }`}
+                >
+                  <span className={`w-4 h-4 rounded-md ${b.swatch}`} />
+                  <div>
+                    <div className="text-[11px] font-bold">{b.label}</div>
+                    <div className="text-[9px] text-slate-400">{b.desc}</div>
+                  </div>
+                </button>
+              ))}
+
+              <div className="w-px h-7 bg-white/10 mx-1" />
+
               <button
-                key={b.id}
-                onClick={() => setActiveFloorBrush(b.id)}
-                className={`flex items-center gap-2.5 rounded-2xl px-3 py-2 text-left transition border ${
-                  activeFloorBrush === b.id
-                    ? 'bg-pink-500/25 border-pink-400 text-white shadow-md'
+                onClick={() => setActiveWallBrush(activeWallBrush === 'add' ? null : 'add')}
+                className={`flex items-center gap-1.5 rounded-2xl px-2.5 py-1.5 text-left transition border ${
+                  activeWallBrush === 'add'
+                    ? 'bg-violet-500/30 border-violet-400 text-white shadow-md'
+                    : 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-200'
+                }`}
+                title="Bấm vào cạnh sau của ô sàn để dựng tường (Phím R đổi hướng Trái/Phải)"
+              >
+                <span className="w-4 h-4 rounded-md bg-violet-400/70 border border-white/40" />
+                <div>
+                  <div className="text-[11px] font-bold">Dựng Tường</div>
+                  <div className="text-[9px] text-slate-400">R xoay Trái/Phải</div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setActiveWallBrush(activeWallBrush === 'remove' ? null : 'remove')}
+                className={`flex items-center gap-1.5 rounded-2xl px-2.5 py-1.5 text-left transition border ${
+                  activeWallBrush === 'remove'
+                    ? 'bg-rose-500/25 border-rose-400 text-white shadow-md'
                     : 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-200'
                 }`}
               >
-                <span className={`w-5 h-5 rounded-md ${b.swatch}`} />
+                <span className="w-4 h-4 rounded-md bg-slate-800 border border-dashed border-rose-400" />
                 <div>
-                  <div className="text-xs font-bold">{b.label}</div>
-                  <div className="text-[10px] text-slate-400">{b.desc}</div>
+                  <div className="text-[11px] font-bold">Xóa Tường</div>
+                  <div className="text-[9px] text-slate-400">Gỡ vách tường</div>
                 </div>
               </button>
-            ))}
+
+              <button
+                onClick={autoBuildWalls}
+                title="Tự động dựng tường bao quanh viền sàn hiện tại"
+                className="rounded-xl bg-indigo-500/20 hover:bg-indigo-500/35 border border-indigo-400/30 px-2.5 py-2 text-[11px] font-semibold text-indigo-200 transition"
+              >
+                Auto Bo Tường
+              </button>
+            </div>
+
+            {/* Floor & Wall Budget Counters */}
+            <div className="flex items-center gap-1.5">
+              {layout.maxFloorTiles && (
+                <span
+                  className={`rounded-xl px-2.5 py-1 text-[11px] font-bold border ${
+                    countFloorTiles(layout.floorMap) >= layout.maxFloorTiles
+                      ? 'bg-rose-500/20 text-rose-300 border-rose-400/40'
+                      : 'bg-white/8 text-amber-200 border-white/10'
+                  }`}
+                >
+                  Sàn: {countFloorTiles(layout.floorMap)}/{layout.maxFloorTiles}
+                </span>
+              )}
+              {layout.maxWallTiles && (
+                <span
+                  className={`rounded-xl px-2.5 py-1 text-[11px] font-bold border ${
+                    (layout.walls?.length ?? 0) >= layout.maxWallTiles
+                      ? 'bg-rose-500/20 text-rose-300 border-rose-400/40'
+                      : 'bg-white/8 text-violet-200 border-white/10'
+                  }`}
+                >
+                  Tường: {layout.walls?.length ?? 0}/{layout.maxWallTiles}
+                </span>
+              )}
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-white/5">
             <div className="flex items-center gap-1 bg-white/5 rounded-xl p-1 border border-white/10">
               {WALL_THEMES.map((wt) => (
                 <button
@@ -209,28 +281,30 @@ export const BuildCatalogDock: React.FC = () => {
               ))}
             </div>
 
-            <button
-              onClick={expandFloorGrid}
-              className="flex items-center gap-1 rounded-xl bg-white/8 hover:bg-white/15 px-2.5 py-2 text-xs font-semibold text-slate-200 transition"
-            >
-              <Maximize className="w-3.5 h-3.5" /> + Rộng
-            </button>
-            <button
-              onClick={shrinkFloorGrid}
-              className="flex items-center gap-1 rounded-xl bg-white/8 hover:bg-white/15 px-2.5 py-2 text-xs font-semibold text-slate-200 transition"
-            >
-              <Minimize className="w-3.5 h-3.5" /> - Gọn
-            </button>
-
-            {isHost && (
+            <div className="flex items-center gap-1.5">
               <button
-                onClick={resetDefaultRoom}
-                title="Đặt lại căn hộ mẫu ban đầu"
-                className="flex items-center gap-1 rounded-xl bg-rose-500/20 hover:bg-rose-500/35 border border-rose-400/30 px-2.5 py-2 text-xs font-semibold text-rose-200 transition"
+                onClick={expandFloorGrid}
+                className="flex items-center gap-1 rounded-xl bg-white/8 hover:bg-white/15 px-2.5 py-1.5 text-xs font-semibold text-slate-200 transition"
               >
-                <RotateCcw className="w-3.5 h-3.5" /> Phòng Mẫu
+                <Maximize className="w-3.5 h-3.5" /> + Rộng
               </button>
-            )}
+              <button
+                onClick={shrinkFloorGrid}
+                className="flex items-center gap-1 rounded-xl bg-white/8 hover:bg-white/15 px-2.5 py-1.5 text-xs font-semibold text-slate-200 transition"
+              >
+                <Minimize className="w-3.5 h-3.5" /> - Gọn
+              </button>
+
+              {isHost && (
+                <button
+                  onClick={resetDefaultRoom}
+                  title="Đặt lại căn hộ mẫu ban đầu"
+                  className="flex items-center gap-1 rounded-xl bg-rose-500/20 hover:bg-rose-500/35 border border-rose-400/30 px-2.5 py-1.5 text-xs font-semibold text-rose-200 transition"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" /> Phòng Mẫu
+                </button>
+              )}
+            </div>
           </div>
         </div>
       ) : (

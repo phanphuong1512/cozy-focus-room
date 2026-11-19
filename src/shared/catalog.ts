@@ -153,6 +153,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     sprite: '/sprites/living_room/window_curtains.png',
     footprint: { w: 2, h: 1 },
     scale: 0.72,
+    wallElevationPx: 50,
     lightEmitter: { color: 0x93c5fd, radius: 150, intensity: 0.45, offsetY: -65 },
     description: 'Cửa sổ lớn có rèm trang trí treo tường.',
   },
@@ -164,6 +165,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     sprite: '/sprites/living_room/sunburst_clock.png',
     footprint: { w: 1, h: 1 },
     scale: 0.55,
+    wallElevationPx: 88,
     description: 'Đồng hồ treo tường trang trí vintage.',
   },
 
@@ -267,6 +269,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     sprite: '/sprites/workspace/ac_unit.png',
     footprint: { w: 1, h: 1 },
     scale: 0.65,
+    wallElevationPx: 112,
     description: 'Máy lạnh treo tường phía trên bàn làm việc.',
   },
   {
@@ -277,6 +280,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     sprite: '/sprites/workspace/pegboard.png',
     footprint: { w: 1, h: 1 },
     scale: 0.62,
+    wallElevationPx: 72,
     description: 'Bảng gỗ treo tường đựng tai nghe, note, bút.',
   },
   {
@@ -287,6 +291,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     sprite: '/sprites/workspace/wire_grid.png',
     footprint: { w: 1, h: 1 },
     scale: 0.58,
+    wallElevationPx: 75,
     description: 'Khung lưới sắt kẹp ảnh polaroid và đèn dây.',
   },
   {
@@ -297,6 +302,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     sprite: '/sprites/workspace/hanging_decor.png',
     footprint: { w: 2, h: 1 },
     scale: 0.48,
+    wallElevationPx: 105,
     lightEmitter: { color: 0xfde047, radius: 140, intensity: 0.6, offsetY: -30 },
     description: 'Dây đèn led & phụ kiện trang trí tường cực chill.',
   },
@@ -359,6 +365,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     sprite: '/sprites/kitchen/upper_cabinets.png',
     footprint: { w: 2, h: 1 },
     scale: 0.45,
+    wallElevationPx: 82,
     description: 'Hệ tủ bếp treo tường gọn gàng.',
   },
   {
@@ -370,6 +377,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     altSprite: '/sprites/kitchen/window_half_open.png',
     footprint: { w: 1, h: 1 },
     scale: 0.65,
+    wallElevationPx: 55,
     lightEmitter: { color: 0x93c5fd, radius: 130, intensity: 0.4, offsetY: -50 },
     description: 'Cửa sổ bếp có thể bấm để mở hé đón gió.',
   },
@@ -440,6 +448,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     sprite: '/sprites/bathroom/shower_set.png',
     footprint: { w: 1, h: 1 },
     scale: 0.58,
+    wallElevationPx: 25,
     description: 'Vòi sen cây gắn tường phòng tắm.',
   },
   {
@@ -451,6 +460,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     altSprite: '/sprites/bathroom/heat_lamp_on.png',
     footprint: { w: 1, h: 1 },
     scale: 0.72,
+    wallElevationPx: 112,
     lightEmitter: { color: 0xfdba74, radius: 160, intensity: 0.85, offsetY: -40 },
     description: 'Đèn sưởi ấm áp (Bấm để bật/tắt đèn!).',
   },
@@ -773,108 +783,143 @@ export function createDefaultRoomLayout(
   };
 }
 
+export function countFloorTiles(floorMap: string[]): number {
+  let count = 0;
+  for (const row of floorMap) {
+    for (let i = 0; i < row.length; i++) {
+      if (row[i] !== '.') count++;
+    }
+  }
+  return count;
+}
+
+export function autoGenerateWallsFromFloor(
+  floorMap: string[],
+  maxWalls = 50
+): string[] {
+  const walls: string[] = [];
+  const hasTile = (gx: number, gy: number) => {
+    if (gy < 0 || gy >= floorMap.length) return false;
+    const row = floorMap[gy] || '';
+    if (gx < 0 || gx >= row.length) return false;
+    return row[gx] !== '.';
+  };
+
+  for (let gy = 0; gy < floorMap.length; gy++) {
+    const row = floorMap[gy] || '';
+    for (let gx = 0; gx < row.length; gx++) {
+      if (!hasTile(gx, gy)) continue;
+      if (!hasTile(gx - 1, gy) && walls.length < maxWalls) {
+        walls.push(`L:${gx},${gy}`);
+      }
+      if (!hasTile(gx, gy - 1) && walls.length < maxWalls) {
+        walls.push(`R:${gx},${gy}`);
+      }
+    }
+  }
+  return walls;
+}
+
 export function createPersonalRoomLayout(
   roomCode: string,
   ownerId = 'host-local',
   ownerName = 'Chủ phòng'
 ): RoomLayout {
+  const starterFloorMap = [
+    '..............',
+    '..............',
+    '..............',
+    '...WWWWWW.....',
+    '...WWCCWW.....',
+    '...WWCCWW.....',
+    '...WWWWWW.....',
+    '...WWWWWW.....',
+    '...WWWWWW.....',
+    '..............',
+    '..............',
+    '..............',
+    '..............',
+    '..............',
+  ];
+
   const starterItems: PlacedItem[] = [
-    // Cửa chính phòng cá nhân
     {
       uid: 'p_door',
       catalogId: 'main_door_b',
-      gx: 6,
-      gy: 13,
+      gx: 5,
+      gy: 8,
       rotation: 0,
       flipped: false,
       layer: 'floor',
       elevationPx: 0,
       toggled: false,
     },
-    // Thảm dưa hấu cửa vào
     {
       uid: 'p_mat',
       catalogId: 'watermelon_mat',
-      gx: 6,
-      gy: 12,
+      gx: 5,
+      gy: 7,
       rotation: 0,
       flipped: false,
       layer: 'floor',
       elevationPx: 0,
       toggled: false,
     },
-    // Kệ giày dép
-    {
-      uid: 'p_shoes',
-      catalogId: 'cabinet_shoes',
-      gx: 4,
-      gy: 13,
-      rotation: 0,
-      flipped: false,
-      layer: 'floor',
-      elevationPx: 0,
-      toggled: false,
-    },
-    // Bàn học tập cá nhân (1x3 dọc tường trái)
     {
       uid: 'p_desk',
       catalogId: 'double_desk',
-      gx: 0,
-      gy: 2,
+      gx: 3,
+      gy: 4,
       rotation: 0,
       flipped: false,
       layer: 'floor',
       elevationPx: 0,
       toggled: false,
     },
-    // Ghế học
     {
       uid: 'p_chair',
       catalogId: 'chair_front',
-      gx: 1,
-      gy: 2,
+      gx: 4,
+      gy: 4,
       rotation: 0,
       flipped: false,
       layer: 'floor',
       elevationPx: 0,
       toggled: false,
     },
-    // Laptop trên bàn
     {
       uid: 'p_laptop',
-      catalogId: 'laptop_open',
-      gx: 0,
-      gy: 2,
+      catalogId: 'laptops',
+      gx: 3,
+      gy: 4,
       rotation: 0,
       flipped: false,
       layer: 'surface',
       parentSurfaceUid: 'p_desk',
-      elevationPx: 38,
+      elevationPx: 44,
       toggled: false,
     },
-    // Cốc cà phê
     {
-      uid: 'p_coffee',
-      catalogId: 'coffee_mug',
-      gx: 0,
-      gy: 3,
-      rotation: 0,
-      flipped: false,
-      layer: 'surface',
-      parentSurfaceUid: 'p_desk',
-      elevationPx: 38,
-      toggled: false,
-    },
-    // Cây cảnh tạo không gian xanh
-    {
-      uid: 'p_plant',
-      catalogId: 'plant_pot_large',
-      gx: 0,
+      uid: 'p_bunny',
+      catalogId: 'prop_bunny_heart',
+      gx: 3,
       gy: 5,
       rotation: 0,
       flipped: false,
-      layer: 'floor',
-      elevationPx: 0,
+      layer: 'surface',
+      parentSurfaceUid: 'p_desk',
+      elevationPx: 44,
+      toggled: false,
+    },
+    {
+      uid: 'p_clock',
+      catalogId: 'sunburst_clock',
+      gx: 3,
+      gy: 4,
+      rotation: 0,
+      flipped: true,
+      layer: 'wall',
+      elevationPx: 88,
       toggled: false,
     },
   ];
@@ -884,28 +929,16 @@ export function createPersonalRoomLayout(
     roomName: `Phòng của ${ownerName}`,
     hostId: ownerId,
     allowGuestBuild: false,
-    floorMap: [
-      'WWWWWWWWWWWWWW',
-      'WWWWWWWWWWWWWW',
-      'WWCCCCWWWWWWWW',
-      'WWCCCCWWWWWWWW',
-      'WWCCCCWWWWWWWW',
-      'WWWWWWWWWWWWWW',
-      'WWWWWWWWWWWWWW',
-      'WWWWWWWWWWWWWW',
-      'WWWWWWWWWWWWWW',
-      'WWWWWWWWWWWWWW',
-      'WWWWWWWWWWWWWW',
-      'WWWWWWWWWWWWWW',
-      'WWWWWWWWWWWWWW',
-      'WWWWWWWWWWWWWW',
-    ],
+    floorMap: starterFloorMap,
+    walls: autoGenerateWallsFromFloor(starterFloorMap, 50),
     wallTheme: 'cream',
     lightingMode: 'day',
     rainEnabled: false,
     isPersonal: true,
     ownerUid: ownerId,
     maxItems: 30,
+    maxFloorTiles: 50,
+    maxWallTiles: 50,
     items: starterItems,
   };
 }

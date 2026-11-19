@@ -702,7 +702,21 @@ io.on('connection', (socket) => {
     if (!room || !canModifyLayout(room, info.hostKey)) return;
 
     if (Array.isArray(patch.floorMap) && patch.floorMap.length >= 4) {
+      if (room.layout.maxFloorTiles) {
+        let count = 0;
+        for (const r of patch.floorMap) {
+          for (let i = 0; i < r.length; i++) if (r[i] !== '.') count++;
+        }
+        if (count > room.layout.maxFloorTiles) {
+          socket.emit('room:toast', { message: `Đã đạt giới hạn tối đa ${room.layout.maxFloorTiles} ô sàn!` });
+          return;
+        }
+      }
       room.layout.floorMap = patch.floorMap;
+    }
+    if (Array.isArray(patch.walls)) {
+      const limit = room.layout.maxWallTiles || 200;
+      room.layout.walls = patch.walls.slice(0, limit);
     }
     if (patch.wallTheme) room.layout.wallTheme = patch.wallTheme;
     if (patch.lightingMode) room.layout.lightingMode = patch.lightingMode;
@@ -833,7 +847,10 @@ io.on('connection', (socket) => {
     const room = rooms.get(info.roomCode);
     if (!room || room.layout.hostId !== info.hostKey) return;
 
-    room.layout = createDefaultRoomLayout(info.roomCode, room.layout.hostId);
+    const player = room.players[socket.id];
+    room.layout = room.layout.isPersonal
+      ? createPersonalRoomLayout(info.roomCode, room.layout.hostId, player?.name || 'Chủ phòng')
+      : createDefaultRoomLayout(info.roomCode, room.layout.hostId);
     saveRoomsToDisk();
     io.to(info.roomCode).emit('room:layout_updated', room.layout);
   });

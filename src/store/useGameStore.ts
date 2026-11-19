@@ -1,6 +1,12 @@
 import { create } from 'zustand';
 import { io, Socket } from 'socket.io-client';
-import { createDefaultRoomLayout, createPersonalRoomLayout, getCatalogItem } from '../shared/catalog';
+import {
+  autoGenerateWallsFromFloor,
+  countFloorTiles,
+  createDefaultRoomLayout,
+  createPersonalRoomLayout,
+  getCatalogItem,
+} from '../shared/catalog';
 import { soundEngine } from '../audio/soundEngine';
 import { useAuthStore } from './useAuthStore';
 import type {
@@ -111,6 +117,7 @@ export interface GameStoreState {
   buildMode: boolean;
   buildTab: BuildTab;
   activeFloorBrush: TileType | null;
+  activeWallBrush: 'add' | 'remove' | null;
   selectedCatalogId: string | null;
   movingItemUid: string | null;
   placeFlipped: boolean;
@@ -174,11 +181,14 @@ export interface GameStoreState {
   toggleBuildMode: (force?: boolean) => void;
   setBuildTab: (tab: BuildTab) => void;
   setActiveFloorBrush: (brush: TileType | null) => void;
+  setActiveWallBrush: (brush: 'add' | 'remove' | null) => void;
   selectCatalogItem: (catalogId: string | null) => void;
   startMovingItem: (uid: string | null) => void;
   togglePlaceFlipped: () => void;
   emitPreview: (preview: Omit<GhostPreview, 'playerId'> | null) => void;
   paintTile: (gx: number, gy: number, tile: TileType) => void;
+  toggleWallSegment: (wallKey: string, mode?: 'add' | 'remove') => void;
+  autoBuildWalls: () => void;
   expandFloorGrid: () => void;
   shrinkFloorGrid: () => void;
   setWallTheme: (theme: WallTheme) => void;
@@ -299,6 +309,7 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
   buildMode: false,
   buildTab: 'workspace',
   activeFloorBrush: null,
+  activeWallBrush: null,
   selectedCatalogId: null,
   movingItemUid: null,
   placeFlipped: false,
@@ -844,7 +855,13 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
   setBuildTab: (tab) =>
     set({
       buildTab: tab,
-      activeFloorBrush: tab === 'floor' ? get().activeFloorBrush || 'W' : null,
+      activeFloorBrush:
+        tab === 'floor' && !get().activeWallBrush
+          ? get().activeFloorBrush || 'W'
+          : tab === 'floor'
+          ? get().activeFloorBrush
+          : null,
+      activeWallBrush: tab === 'floor' ? get().activeWallBrush : null,
       selectedCatalogId: tab === 'floor' ? null : get().selectedCatalogId,
       movingItemUid: null,
     }),
@@ -852,6 +869,15 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
   setActiveFloorBrush: (brush) =>
     set({
       activeFloorBrush: brush,
+      activeWallBrush: null,
+      selectedCatalogId: null,
+      movingItemUid: null,
+    }),
+
+  setActiveWallBrush: (brush) =>
+    set({
+      activeWallBrush: brush,
+      activeFloorBrush: null,
       selectedCatalogId: null,
       movingItemUid: null,
     }),
@@ -860,6 +886,7 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
     set({
       selectedCatalogId: catalogId,
       activeFloorBrush: null,
+      activeWallBrush: null,
       movingItemUid: null,
       placeFlipped: false,
     }),
@@ -875,6 +902,7 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
       movingItemUid: uid,
       selectedCatalogId: null,
       activeFloorBrush: null,
+      activeWallBrush: null,
       placeFlipped: existing ? existing.flipped : false,
     });
   },
@@ -895,6 +923,15 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
     if (gx < 0 || gx >= row.length) return;
     if (row[gx] === tile) return;
 
+    // Enforce maxFloorTiles when adding a new floor tile onto an empty '.' cell
+    if (row[gx] === '.' && tile !== '.' && layout.maxFloorTiles) {
+      const currentCount = countFloorTiles(layout.floorMap);
+      if (currentCount >= layout.maxFloorTiles) {
+        get().showToast(`⚠️ Đã đạt giới hạn tối đa ${layout.maxFloorTiles} ô sàn!`);
+        return;
+      }
+    }
+
     const nextRow = row.slice(0, gx) + tile + row.slice(gx + 1);
     const nextFloorMap = layout.floorMap.map((r, idx) =>
       idx === gy ? nextRow : r
@@ -905,6 +942,45 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
     set({ layout: nextLayout });
     saveJsonStorage(`cozy_offline_layout_v2_${nextLayout.roomCode}`, nextLayout);
     socket?.emit('room:update_floor', { floorMap: nextFloorMap });
+  },
+
+  toggleWallSegment: (wallKey, mode) => {
+    if (!get().canBuild()) return;
+    const layout = get().layout;
+    const currentWalls = layout.walls ? [...layout.walls] : autoGenerateWallsFromFloor(layout.floorMap, 200);
+    const idx = currentWalls.indexOf(wallKey);
+
+    if (mode === 'remove' || (mode !== 'add' && idx >= 0)) {
+      if (idx < 0) return;
+      currentWalls.splice(idx, 1);
+    } else {
+      if (idx >= 0) return;
+      const limit = layout.maxWallTiles || 200;
+      if (currentWalls.length >= limit) {
+        get().showToast(`⚠️ Đã đạt giới hạn tối đa ${limit} ô tường!`);
+        return;
+      }
+      currentWalls.push(wallKey);
+    }
+
+    const nextLayout = { ...layout, walls: currentWalls };
+    soundEngine.playSfx('interact');
+    set({ layout: nextLayout });
+    saveJsonStorage(`cozy_offline_layout_v2_${nextLayout.roomCode}`, nextLayout);
+    socket?.emit('room:update_floor', { walls: currentWalls });
+  },
+
+  autoBuildWalls: () => {
+    if (!get().canBuild()) return;
+    const layout = get().layout;
+    const limit = layout.maxWallTiles || 200;
+    const nextWalls = autoGenerateWallsFromFloor(layout.floorMap, limit);
+    const nextLayout = { ...layout, walls: nextWalls };
+    soundEngine.playSfx('interact');
+    set({ layout: nextLayout });
+    saveJsonStorage(`cozy_offline_layout_v2_${nextLayout.roomCode}`, nextLayout);
+    socket?.emit('room:update_floor', { walls: nextWalls });
+    get().showToast(`🧱 Đã tự động bo ${nextWalls.length}/${limit} ô tường theo hình dáng sàn!`);
   },
 
   expandFloorGrid: () => {
