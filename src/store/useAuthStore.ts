@@ -63,9 +63,11 @@ interface AuthStoreState {
   authError: string | null;
 
   loginWithGoogleCredential: (credential: string) => boolean;
+  loginWithUser: (user: AuthUser) => void;
   loginAsGuest: (guestName?: string) => void;
   logout: () => void;
   setScreen: (screen: AppScreen) => void;
+  setError: (err: string | null) => void;
   clearError: () => void;
 }
 
@@ -103,6 +105,12 @@ export const useAuthStore = create<AuthStoreState>((set) => ({
     }
   },
 
+  loginWithUser: (user: AuthUser) => {
+    const cleanUser: AuthUser = { ...user, isGuest: false };
+    saveStoredUser(cleanUser);
+    set({ user: cleanUser, currentScreen: 'lobby', authError: null });
+  },
+
   loginAsGuest: (guestName = 'Khách Chill') => {
     const guestUid = 'guest_' + Math.random().toString(36).slice(2, 10);
     const user: AuthUser = {
@@ -122,5 +130,6 @@ export const useAuthStore = create<AuthStoreState>((set) => ({
   },
 
   setScreen: (screen) => set({ currentScreen: screen }),
+  setError: (err) => set({ authError: err }),
   clearError: () => set({ authError: null }),
 }));

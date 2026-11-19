@@ -297,6 +297,220 @@ app.all('/api/kick-player', (req, res) => {
   res.json({ ok: true, kicked });
 });
 
+const GOOGLE_CLIENT_ID =
+  (process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || '').trim() ||
+  '743759840913-cr689blpjcct1t6cb6e6cibjusdgavc7.apps.googleusercontent.com';
+
+interface PendingAuthEntry {
+  status: 'pending' | 'success' | 'error';
+  user?: {
+    uid: string;
+    name: string;
+    email: string;
+    avatarUrl: string;
+  };
+  error?: string;
+  expiresAt: number;
+}
+
+const pendingAuths = new Map<string, PendingAuthEntry>();
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of pendingAuths.entries()) {
+    if (v.expiresAt < now) pendingAuths.delete(k);
+  }
+}, 60_000);
+
+app.get('/auth/google/start', (req, res) => {
+  const state = String(req.query.state || '').trim();
+  if (!state) {
+    res.status(400).send('Missing state parameter');
+    return;
+  }
+
+  pendingAuths.set(state, {
+    status: 'pending',
+    expiresAt: Date.now() + 5 * 60 * 1000,
+  });
+
+  const host = req.get('host');
+  const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
+  const redirectUri = `${proto}://${host}/auth/google/callback`;
+
+  const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  authUrl.searchParams.set('client_id', GOOGLE_CLIENT_ID);
+  authUrl.searchParams.set('redirect_uri', redirectUri);
+  authUrl.searchParams.set('response_type', 'token');
+  authUrl.searchParams.set('scope', 'openid email profile');
+  authUrl.searchParams.set('state', state);
+  authUrl.searchParams.set('prompt', 'select_account');
+
+  res.redirect(authUrl.toString());
+});
+
+app.get('/auth/google/callback', (_req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(`<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Đăng nhập Cozy Focus Room</title>
+  <style>
+    body {
+      margin: 0; font-family: system-ui, -apple-system, sans-serif;
+      background: #100a1c; color: #f8fafc;
+      display: flex; align-items: center; justify-content: center; min-height: 100vh;
+    }
+    .card {
+      background: #1a1228; border: 1px solid rgba(244,114,182,0.35);
+      border-radius: 24px; padding: 32px; max-width: 400px; text-align: center;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+    }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    p { font-size: 14px; color: #cbd5e1; line-height: 1.5; margin: 0; }
+    .ok { color: #34d399; }
+    .err { color: #fb7185; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1 id="title">Đang hoàn tất đăng nhập...</h1>
+    <p id="desc">Vui lòng chờ một chút.</p>
+  </div>
+  <script>
+    (async function() {
+      const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const query = new URLSearchParams(window.location.search);
+      const accessToken = hash.get('access_token');
+      const state = hash.get('state') || query.get('state');
+      const error = hash.get('error') || query.get('error');
+
+      const title = document.getElementById('title');
+      const desc = document.getElementById('desc');
+
+      if (error || !accessToken || !state) {
+        title.textContent = 'Đăng nhập thất bại';
+        title.className = 'err';
+        desc.textContent = error ? ('Lỗi từ Google: ' + error) : 'Không nhận được token xác thực.';
+        if (state) {
+          await fetch('/api/auth/google/complete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ state, error: error || 'cancelled' })
+          });
+        }
+        return;
+      }
+
+      try {
+        const resp = await fetch('/api/auth/google/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state, access_token: accessToken })
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          title.textContent = 'Đăng nhập thành công!';
+          title.className = 'ok';
+          desc.textContent = 'Bạn có thể đóng tab trình duyệt này và quay lại ứng dụng Cozy Focus Room.';
+          setTimeout(() => { try { window.close(); } catch (e) {} }, 1200);
+        } else {
+          throw new Error(data.error || 'Unknown error');
+        }
+      } catch (err) {
+        title.textContent = 'Có lỗi xảy ra';
+        title.className = 'err';
+        desc.textContent = err.message || 'Không thể hoàn tất đăng nhập.';
+      }
+    })();
+  </script>
+</body>
+</html>`);
+});
+
+app.post('/api/auth/google/complete', async (req, res) => {
+  const { state, access_token, error } = req.body || {};
+  if (!state) {
+    res.status(400).json({ ok: false, error: 'Missing state' });
+    return;
+  }
+
+  if (error || !access_token) {
+    pendingAuths.set(state, {
+      status: 'error',
+      error: String(error || 'Đăng nhập bị hủy'),
+      expiresAt: Date.now() + 2 * 60 * 1000,
+    });
+    res.json({ ok: false, error: String(error || 'Cancelled') });
+    return;
+  }
+
+  try {
+    const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${access_token}` },
+    });
+    if (!userRes.ok) {
+      throw new Error(`Google userinfo HTTP ${userRes.status}`);
+    }
+    const info = (await userRes.json()) as {
+      sub?: string;
+      name?: string;
+      given_name?: string;
+      email?: string;
+      picture?: string;
+    };
+    if (!info.sub) {
+      throw new Error('Không tìm thấy Google UID');
+    }
+
+    pendingAuths.set(state, {
+      status: 'success',
+      user: {
+        uid: String(info.sub),
+        name: String(info.name || info.given_name || 'Người chơi'),
+        email: String(info.email || ''),
+        avatarUrl: String(info.picture || ''),
+      },
+      expiresAt: Date.now() + 2 * 60 * 1000,
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Google verification failed';
+    pendingAuths.set(state, {
+      status: 'error',
+      error: msg,
+      expiresAt: Date.now() + 2 * 60 * 1000,
+    });
+    res.status(500).json({ ok: false, error: msg });
+  }
+});
+
+app.get('/api/auth/google/status', (req, res) => {
+  const state = String(req.query.state || '').trim();
+  if (!state) {
+    res.status(400).json({ status: 'error', error: 'Missing state' });
+    return;
+  }
+  const entry = pendingAuths.get(state);
+  if (!entry) {
+    res.json({ status: 'pending' });
+    return;
+  }
+  if (entry.status === 'success' && entry.user) {
+    pendingAuths.delete(state);
+    res.json({ status: 'success', user: entry.user });
+    return;
+  }
+  if (entry.status === 'error') {
+    pendingAuths.delete(state);
+    res.json({ status: 'error', error: entry.error });
+    return;
+  }
+  res.json({ status: 'pending' });
+});
+
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {

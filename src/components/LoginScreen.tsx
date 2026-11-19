@@ -1,95 +1,92 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Sparkles, User, LogIn, Coffee, ShieldCheck } from 'lucide-react';
-import { GOOGLE_CLIENT_ID, useAuthStore } from '../store/useAuthStore';
+import { Sparkles, User, LogIn, Coffee, ShieldCheck, ExternalLink, X } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
+import { useAuthStore } from '../store/useAuthStore';
 
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        id: {
-          initialize: (config: {
-            client_id: string;
-            callback: (res: { credential: string }) => void;
-            auto_select?: boolean;
-            cancel_on_tap_outside?: boolean;
-          }) => void;
-          renderButton: (
-            parent: HTMLElement,
-            options: {
-              theme?: 'outline' | 'filled_blue' | 'filled_black';
-              size?: 'large' | 'medium' | 'small';
-              shape?: 'pill' | 'rectangular';
-              text?: 'signin_with' | 'signup_with' | 'continue_with';
-              width?: number;
-              logo_alignment?: 'left' | 'center';
-            }
-          ) => void;
-          prompt: () => void;
-        };
-      };
-    };
-  }
-}
+const SERVER_URL =
+  (import.meta.env.VITE_SERVER_URL as string | undefined)?.replace(/\/+$/, '') ||
+  'https://cozy-focus-server-production.up.railway.app';
 
 export const LoginScreen: React.FC = () => {
-  const loginWithGoogleCredential = useAuthStore((s) => s.loginWithGoogleCredential);
+  const loginWithUser = useAuthStore((s) => s.loginWithUser);
   const loginAsGuest = useAuthStore((s) => s.loginAsGuest);
   const authError = useAuthStore((s) => s.authError);
+  const setError = useAuthStore((s) => s.setError);
   const clearError = useAuthStore((s) => s.clearError);
 
-  const googleBtnRef = useRef<HTMLDivElement>(null);
-  const [googleLoaded, setGoogleLoaded] = useState(false);
+  const [isWaitingBrowser, setIsWaitingBrowser] = useState(false);
   const [showGuestInput, setShowGuestInput] = useState(false);
   const [guestName, setGuestName] = useState('Khách Chill');
+  const pollTimerRef = useRef<number | null>(null);
+
+  const stopPolling = () => {
+    if (pollTimerRef.current !== null) {
+      window.clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+    setIsWaitingBrowser(false);
+  };
 
   useEffect(() => {
-    let checkInterval: number | null = null;
-
-    const setupGoogleGsi = () => {
-      if (!window.google?.accounts?.id || !googleBtnRef.current) return false;
-
-      try {
-        window.google.accounts.id.initialize({
-          client_id: GOOGLE_CLIENT_ID,
-          callback: (response) => {
-            if (response.credential) {
-              loginWithGoogleCredential(response.credential);
-            }
-          },
-          auto_select: false,
-          cancel_on_tap_outside: true,
-        });
-
-        googleBtnRef.current.innerHTML = '';
-        window.google.accounts.id.renderButton(googleBtnRef.current, {
-          theme: 'filled_black',
-          size: 'large',
-          shape: 'pill',
-          text: 'continue_with',
-          width: 280,
-          logo_alignment: 'left',
-        });
-
-        setGoogleLoaded(true);
-        return true;
-      } catch (err) {
-        console.error('[LoginScreen] GSI init error:', err);
-        return false;
+    return () => {
+      if (pollTimerRef.current !== null) {
+        window.clearInterval(pollTimerRef.current);
       }
     };
+  }, []);
 
-    if (!setupGoogleGsi()) {
-      checkInterval = window.setInterval(() => {
-        if (setupGoogleGsi()) {
-          if (checkInterval) window.clearInterval(checkInterval);
-        }
-      }, 300);
+  const handleGoogleLogin = async () => {
+    clearError();
+    const state =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
+    const startUrl = `${SERVER_URL}/auth/google/start?state=${encodeURIComponent(state)}`;
+    setIsWaitingBrowser(true);
+
+    // Open in system default browser when inside Tauri, or popup when on web
+    const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+    try {
+      if (isTauri) {
+        await invoke('open_external_url', { url: startUrl });
+      } else {
+        window.open(startUrl, 'cozy_google_oauth', 'width=500,height=640');
+      }
+    } catch (err) {
+      console.error('[LoginScreen] Failed to open browser for Google Auth:', err);
+      setError('Không thể mở trình duyệt để đăng nhập Google.');
+      setIsWaitingBrowser(false);
+      return;
     }
 
-    return () => {
-      if (checkInterval) window.clearInterval(checkInterval);
-    };
-  }, [loginWithGoogleCredential]);
+    const startedAt = Date.now();
+    pollTimerRef.current = window.setInterval(async () => {
+      // Timeout after 3 minutes
+      if (Date.now() - startedAt > 3 * 60 * 1000) {
+        stopPolling();
+        setError('Hết thời gian chờ đăng nhập Google. Vui lòng thử lại.');
+        return;
+      }
+
+      try {
+        const res = await fetch(
+          `${SERVER_URL}/api/auth/google/status?state=${encodeURIComponent(state)}`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.status === 'success' && data.user) {
+          stopPolling();
+          loginWithUser(data.user);
+        } else if (data.status === 'error') {
+          stopPolling();
+          setError(data.error || 'Đăng nhập Google thất bại.');
+        }
+      } catch {
+        // Ignore transient network errors while polling
+      }
+    }, 1200);
+  };
 
   const handleGuestSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -146,21 +143,57 @@ export const LoginScreen: React.FC = () => {
               onClick={clearError}
               className="mt-1 text-[11px] underline text-rose-300 hover:text-white"
             >
-              Thử lại
+              Đóng
             </button>
           </div>
         )}
 
-        {/* Google Sign In Container */}
+        {/* Google Sign In Button */}
         <div className="flex flex-col items-center justify-center gap-3">
-          <div
-            ref={googleBtnRef}
-            className="min-h-[44px] flex items-center justify-center"
-          />
-
-          {!googleLoaded && (
-            <div className="text-[11px] text-slate-400 animate-pulse">
-              Đang tải Google Sign-In...
+          {!isWaitingBrowser ? (
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              className="w-full py-2.5 px-4 rounded-full bg-white hover:bg-slate-100 text-slate-800 font-bold text-xs shadow-lg transition flex items-center justify-center gap-2.5 cursor-pointer"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24">
+                <path
+                  fill="#4285F4"
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                />
+              </svg>
+              <span>Tiếp tục với Google</span>
+              <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+            </button>
+          ) : (
+            <div className="w-full rounded-2xl bg-pink-500/15 border border-pink-400/40 p-3 text-xs text-pink-100 space-y-2">
+              <div className="flex items-center justify-center gap-2 font-semibold">
+                <span className="w-2 h-2 rounded-full bg-pink-400 animate-ping" />
+                <span>Đang mở trình duyệt để xác thực Google...</span>
+              </div>
+              <p className="text-[11px] text-slate-300">
+                Sau khi chọn tài khoản Google trên trình duyệt, ứng dụng sẽ tự động đăng nhập.
+              </p>
+              <button
+                type="button"
+                onClick={stopPolling}
+                className="inline-flex items-center gap-1 rounded-full bg-white/10 hover:bg-white/20 px-3 py-1 text-[11px] text-slate-200 transition"
+              >
+                <X className="w-3 h-3" />
+                <span>Hủy</span>
+              </button>
             </div>
           )}
 
