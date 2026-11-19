@@ -69,134 +69,91 @@ export function renderCustomAvatarToCanvas(
   ctx.imageSmoothingEnabled = false;
   ctx.clearRect(0, 0, W, H);
 
-  // 1. Draw base mannequin and apply skinTone tint to skin pixels (preserving dark outlines)
+  // 1. Draw base mannequin and natively recolor skin, top, bottoms & shoes by body zone
+  // (preserving every original pixel outline and isometric shading instead of drawing blocky overlays)
   ctx.drawImage(baseImg, 0, 0, W, H);
   const defaultSkin = '#f3d2b3';
-  if (config.skinTone.toLowerCase() !== defaultSkin) {
-    const imgData = ctx.getImageData(0, 0, W, H);
-    const data = imgData.data;
-    const [tr, tg, tb] = hexToRgb(config.skinTone);
-    const [sr, sg, sb] = hexToRgb(defaultSkin);
-    const rr = tr / sr;
-    const gg = tg / sg;
-    const bb = tb / sb;
-    for (let i = 0; i < data.length; i += 4) {
+  const [sr, sg, sb] = hexToRgb(defaultSkin);
+  const [skinR, skinG, skinB] = hexToRgb(config.skinTone);
+  const [topR, topG, topB] = hexToRgb(config.topColor);
+  const [botR, botG, botB] = hexToRgb(config.bottomColor);
+  const [shoeR, shoeG, shoeB] = hexToRgb(config.shoeColor);
+
+  const imgData = ctx.getImageData(0, 0, W, H);
+  const data = imgData.data;
+  const torsoEnd = frameCtx.isSitting ? 156 : 162;
+  const legEnd = frameCtx.isSitting ? 196 : 214;
+  const recolorSkin = config.skinTone.toLowerCase() !== defaultSkin;
+
+  for (let py = 0; py < H; py++) {
+    for (let pxX = 0; pxX < W; pxX++) {
+      const i = (py * W + pxX) * 4;
       if (data[i + 3] < 20) continue;
+      const r = data[i], g = data[i + 1], b = data[i + 2];
       // Preserve dark outlines
-      if (data[i] < 95 && data[i + 1] < 75 && data[i + 2] < 70) continue;
-      data[i] = Math.max(0, Math.min(255, Math.round(data[i] * rr)));
-      data[i + 1] = Math.max(0, Math.min(255, Math.round(data[i + 1] * gg)));
-      data[i + 2] = Math.max(0, Math.min(255, Math.round(data[i + 2] * bb)));
+      if (r < 85 && g < 68 && b < 64) continue;
+
+      // Determine target palette color for this pixel's body zone
+      let target: [number, number, number] | null = null;
+      if (py <= 108) {
+        if (recolorSkin) target = [skinR, skinG, skinB];
+      } else if (py <= torsoEnd) {
+        const isHand = py >= 150 && (pxX < 65 || pxX > 120);
+        const isTshirtArm = config.topStyle === 'tshirt' && py >= 132 && (pxX < 66 || pxX > 119);
+        if (isHand || isTshirtArm) {
+          if (recolorSkin) target = [skinR, skinG, skinB];
+        } else {
+          target = [topR, topG, topB];
+        }
+      } else if (py <= legEnd) {
+        const isHand = py <= 180 && (pxX < 65 || pxX > 119);
+        if (isHand) {
+          if (recolorSkin) target = [skinR, skinG, skinB];
+        } else if (config.topStyle === 'dress' && py <= 185) {
+          target = [topR, topG, topB];
+        } else {
+          target = [botR, botG, botB];
+        }
+      } else {
+        target = [shoeR, shoeG, shoeB];
+      }
+
+      if (target) {
+        data[i] = Math.max(0, Math.min(255, Math.round((r / sr) * target[0])));
+        data[i + 1] = Math.max(0, Math.min(255, Math.round((g / sg) * target[1])));
+        data[i + 2] = Math.max(0, Math.min(255, Math.round((b / sb) * target[2])));
+      }
     }
-    ctx.putImageData(imgData, 0, 0);
   }
+  ctx.putImageData(imgData, 0, 0);
 
   // Head & body anchor offsets (in 3px grid units: 60x80 grid!)
-  // idle_se head is centered around gx=31, gy=22; sit_se shifts ~1.5 grid units left & slightly down
   const hx = frameCtx.isSitting ? 29.5 : 31;
-  const hy = frameCtx.isSitting ? 21 : 21;
+  const hy = 21;
   const bx = frameCtx.isSitting ? 29.5 : 31;
-  const by = frameCtx.isSitting ? 38 : 38;
+  const by = 38;
 
   const topDark = shadeHex(config.topColor, 0.72);
   const topLight = shadeHex(config.topColor, 1.15);
-  const botDark = shadeHex(config.bottomColor, 0.72);
-  const shoeDark = shadeHex(config.shoeColor, 0.72);
   const hairHex = config.hairColor === 'original' ? '#5c3a21' : config.hairColor;
   const hairDark = shadeHex(hairHex, 0.7);
   const hairLight = shadeHex(hairHex, 1.2);
 
-  // 2. Shoes & Bottoms (Pants / Skirt)
-  if (frameCtx.isSitting) {
-    // Sitting pants
-    px(ctx, bx - 6, by + 15, 13, 6, OUTLINE);
-    px(ctx, bx - 5, by + 16, 11, 4, config.bottomColor);
-    px(ctx, bx - 4, by + 19, 12, 6, botDark);
-    // Legs down
-    px(ctx, bx + 1, by + 24, 5, 11, OUTLINE);
-    px(ctx, bx + 2, by + 24, 3, 10, config.bottomColor);
-    px(ctx, bx + 7, by + 21, 5, 10, OUTLINE);
-    px(ctx, bx + 8, by + 21, 3, 9, botDark);
-    // Shoes
-    px(ctx, bx + 1, by + 34, 6, 4, OUTLINE);
-    px(ctx, bx + 2, by + 35, 4, 2, config.shoeColor);
-    px(ctx, bx + 7, by + 30, 6, 4, OUTLINE);
-    px(ctx, bx + 8, by + 31, 4, 2, shoeDark);
-  } else {
-    const stride =
-      frameCtx.walkFrame === 0
-        ? -1
-        : frameCtx.walkFrame === 1
-        ? 0
-        : frameCtx.walkFrame === 2
-        ? 1
-        : 0;
-    // Waistband & hips
-    px(ctx, bx - 7, by + 15, 14, 5, OUTLINE);
-    px(ctx, bx - 6, by + 16, 12, 4, config.bottomColor);
-
-    if (config.topStyle === 'dress') {
-      // Skirt flare
-      px(ctx, bx - 8, by + 16, 16, 8, OUTLINE);
-      px(ctx, bx - 7, by + 17, 14, 6, config.topColor);
-      px(ctx, bx - 7, by + 21, 14, 2, topDark);
-    } else {
-      // Left leg
-      px(ctx, bx - 6 + stride, by + 20, 6, 15, OUTLINE);
-      px(ctx, bx - 5 + stride, by + 20, 4, 14, config.bottomColor);
-      // Right leg
-      px(ctx, bx + 1 - stride, by + 19, 6, 13, OUTLINE);
-      px(ctx, bx + 2 - stride, by + 19, 4, 12, botDark);
-    }
-
-    // Shoes
-    px(ctx, bx - 7 + stride, by + 34, 7, 5, OUTLINE);
-    px(ctx, bx - 6 + stride, by + 35, 5, 3, config.shoeColor);
-    px(ctx, bx + 1 - stride, by + 31, 7, 5, OUTLINE);
-    px(ctx, bx + 2 - stride, by + 32, 5, 3, shoeDark);
-  }
-
-  // 3. Top (Torso & Sleeves)
-  // Torso base
-  px(ctx, bx - 7, by, 14, 16, OUTLINE);
-  px(ctx, bx - 6, by + 1, 12, 14, config.topColor);
-  px(ctx, bx - 6, by + 12, 12, 3, topDark);
-
-  // Sleeves
-  if (frameCtx.isSitting) {
-    px(ctx, bx - 9, by + 2, 4, 9, OUTLINE);
-    px(ctx, bx - 8, by + 3, 2, 7, config.topColor);
-    px(ctx, bx + 5, by + 2, 4, 8, OUTLINE);
-    px(ctx, bx + 6, by + 3, 2, 6, topDark);
-  } else {
-    px(ctx, bx - 10, by + 2, 4, 10, OUTLINE);
-    px(ctx, bx - 9, by + 3, 2, 8, config.topColor);
-    px(ctx, bx + 6, by + 2, 4, 9, OUTLINE);
-    px(ctx, bx + 7, by + 3, 2, 7, topDark);
-  }
-
-  // Top style details
-  if (config.topStyle === 'hoodie') {
-    // Hood collar + front pocket + strings
-    px(ctx, bx - 4, by, 8, 3, topDark);
-    if (!frameCtx.isBack) {
-      px(ctx, bx - 2, by + 3, 1, 4, '#f8fafc');
-      px(ctx, bx + 2, by + 3, 1, 4, '#f8fafc');
-      px(ctx, bx - 4, by + 9, 8, 4, topDark);
-    }
-  } else if (config.topStyle === 'cardigan') {
-    if (!frameCtx.isBack) {
-      px(ctx, bx - 2, by + 1, 5, 14, '#f8fafc');
+  // 2. Subtle clothing surface details (inside mannequin torso silhouette, no blocky boxes)
+  if (!frameCtx.isBack) {
+    if (config.topStyle === 'hoodie') {
+      px(ctx, bx - 2, by + 2, 1, 4, '#f8fafc');
+      px(ctx, bx + 2, by + 2, 1, 4, '#f8fafc');
+      px(ctx, bx - 4, by + 9, 8, 3, topDark);
+    } else if (config.topStyle === 'cardigan') {
+      px(ctx, bx - 1, by + 1, 3, 12, '#f8fafc');
       px(ctx, bx, by + 3, 1, 1, OUTLINE);
       px(ctx, bx, by + 7, 1, 1, OUTLINE);
       px(ctx, bx, by + 11, 1, 1, OUTLINE);
+    } else if (config.topStyle === 'sweater') {
+      px(ctx, bx - 4, by + 1, 8, 2, topLight);
+      px(ctx, bx - 5, by + 12, 10, 2, topLight);
     }
-  } else if (config.topStyle === 'sweater') {
-    px(ctx, bx - 4, by - 1, 8, 3, topLight);
-    px(ctx, bx - 6, by + 13, 12, 2, topLight);
-  } else if (config.topStyle === 'tshirt') {
-    // Short sleeves reveal lower arms
-    px(ctx, bx - 3, by, 6, 2, topLight);
   }
 
   // 4. Face (Eyes & Blush) - only when facing forward (SE/SW)

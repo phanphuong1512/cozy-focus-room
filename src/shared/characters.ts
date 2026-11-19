@@ -11,15 +11,15 @@ import type {
 
 export const DEFAULT_CUSTOM_AVATAR: CustomAvatarConfig = {
   skinTone: '#f3d2b3',
-  hairStyle: 'short',
-  hairColor: '#3b2820',
+  hairStyle: 'girl_long',
+  hairColor: 'original',
   eyeStyle: 'cute',
   blush: true,
   topStyle: 'hoodie',
   topColor: '#a78bfa',
   bottomColor: '#334155',
   shoeColor: '#f8fafc',
-  accessory: 'headphones',
+  accessory: 'none',
 };
 
 export const SKIN_TONES: { label: string; color: string }[] = [
