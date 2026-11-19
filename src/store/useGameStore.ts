@@ -187,6 +187,7 @@ export interface GameStoreState {
   removeItem: (uid: string) => void;
   toggleItemInteraction: (uid: string) => void;
   resetDefaultRoom: () => void;
+  kickPlayer: (playerId: string) => void;
 
   // Pomodoro & Todos
   startPomodoro: () => void;
@@ -232,6 +233,11 @@ const savedProfile = loadJsonStorage<{
   outfit: 'c1',
   tintColor: '#a78bfa',
 });
+
+if (savedProfile.name === 'Kaito' || savedProfile.name.trim() === '') {
+  savedProfile.name = 'Người chơi';
+  saveJsonStorage('cozy_player_profile_v2', savedProfile);
+}
 
 const savedTodos = loadJsonStorage<TodoItem[]>('cozy_todos', [
   {
@@ -533,6 +539,10 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
       if (get().pomodoro.syncedWithRoom) {
         set({ pomodoro });
       }
+    });
+
+    socket.on('room:kicked', ({ reason }: { reason?: string }) => {
+      get().showToast(reason || 'Bạn đã được chủ phòng mời ra khỏi phòng');
     });
   },
 
@@ -1048,6 +1058,17 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
     saveJsonStorage(`cozy_offline_layout_v2_${nextLayout.roomCode}`, nextLayout);
     socket?.emit('room:reset_default');
     get().showToast('🏡 Đã khôi phục căn hộ mẫu ấm cúng!');
+  },
+
+  kickPlayer: (playerId: string) => {
+    if (!get().isHost) return;
+    socket?.emit('room:kick_player', { playerId });
+    set((s) => {
+      const nextPlayers = { ...s.players };
+      delete nextPlayers[playerId];
+      return { players: nextPlayers };
+    });
+    get().showToast('Đã mời người chơi ra khỏi phòng');
   },
 
   // Pomodoro

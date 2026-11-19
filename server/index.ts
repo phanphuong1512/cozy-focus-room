@@ -141,6 +141,52 @@ app.all('/api/prune-ghosts', (_req, res) => {
   res.json({ ok: true, removed });
 });
 
+app.get('/api/room-details', (_req, res) => {
+  const result: Record<string, any> = {};
+  for (const [code, room] of rooms.entries()) {
+    result[code] = {
+      playerCount: Object.keys(room.players).length,
+      players: Object.entries(room.players).map(([id, p]) => {
+        const sock = io.sockets.sockets.get(id);
+        return {
+          id,
+          name: p.name,
+          outfit: p.outfit,
+          ip: sock?.handshake.address || (sock?.request.headers['x-forwarded-for'] as string) || 'unknown',
+          connectedAt: sock?.handshake.time,
+        };
+      }),
+    };
+  }
+  res.json(result);
+});
+
+app.all('/api/kick-player', (req, res) => {
+  const targetName = (req.query.name || req.body?.name || '').toString().trim();
+  const targetId = (req.query.id || req.body?.id || '').toString().trim();
+  let kicked = 0;
+  for (const [code, room] of rooms.entries()) {
+    for (const [pid, player] of Object.entries(room.players)) {
+      if (
+        (targetName && player.name.toLowerCase() === targetName.toLowerCase()) ||
+        (targetId && pid === targetId)
+      ) {
+        console.log(`[server] API kick player ${player.name} (${pid}) from #${code}`);
+        const sock = io.sockets.sockets.get(pid);
+        delete room.players[pid];
+        socketRoomMap.delete(pid);
+        io.to(code).emit('player:left', { playerId: pid });
+        if (sock) {
+          sock.emit('room:kicked', { reason: 'Bạn đã được mời ra khỏi phòng.' });
+          sock.disconnect(true);
+        }
+        kicked++;
+      }
+    }
+  }
+  res.json({ ok: true, kicked });
+});
+
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
@@ -205,7 +251,7 @@ io.on('connection', (socket) => {
 
       const newPlayer: PlayerState = {
         id: socket.id,
-        name: (payload.player?.name || 'Khách').slice(0, 24),
+        name: (payload.player?.name === 'Kaito' ? 'Người chơi' : (payload.player?.name || 'Khách')).slice(0, 24),
         outfit: payload.player?.outfit || 'c7',
         tintColor: payload.player?.tintColor || '#a78bfa',
         gx: payload.player?.gx ?? 4.5,
@@ -235,6 +281,30 @@ io.on('connection', (socket) => {
       socket.to(cleanCode).emit('player:joined', { player: newPlayer });
     }
   );
+
+  socket.on('room:kick_player', (payload: { playerId: string }) => {
+    const info = socketRoomMap.get(socket.id);
+    if (!info) return;
+    const room = rooms.get(info.roomCode);
+    if (!room || room.layout.hostId !== info.hostKey) return;
+
+    const targetId = payload?.playerId;
+    if (!targetId || targetId === socket.id) return;
+
+    const targetPlayer = room.players[targetId];
+    if (targetPlayer) {
+      console.log(`[server] Host kicked player ${targetPlayer.name} (${targetId}) from #${info.roomCode}`);
+      delete room.players[targetId];
+      socketRoomMap.delete(targetId);
+      io.to(info.roomCode).emit('player:left', { playerId: targetId });
+
+      const targetSocket = io.sockets.sockets.get(targetId);
+      if (targetSocket) {
+        targetSocket.emit('room:kicked', { reason: 'Bạn đã được chủ phòng mời ra khỏi phòng.' });
+        targetSocket.disconnect(true);
+      }
+    }
+  });
 
   socket.on('player:update', (patch: Partial<PlayerState>) => {
     const info = socketRoomMap.get(socket.id);

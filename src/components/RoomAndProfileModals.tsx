@@ -39,6 +39,7 @@ export const RoomAndProfileModals: React.FC = () => {
   const hasCustomizedCharacter = useGameStore((s) => s.hasCustomizedCharacter);
   const roomCode = useGameStore((s) => s.roomCode);
   const isHost = useGameStore((s) => s.isHost);
+  const myPlayerId = useGameStore((s) => s.myPlayerId);
   const players = useGameStore((s) => s.players);
   const localPlayer = useGameStore((s) => s.localPlayer);
   const layout = useGameStore((s) => s.layout);
@@ -47,6 +48,7 @@ export const RoomAndProfileModals: React.FC = () => {
   const setShowProfileModal = useGameStore((s) => s.setShowProfileModal);
   const joinRoom = useGameStore((s) => s.joinRoom);
   const resetDefaultRoom = useGameStore((s) => s.resetDefaultRoom);
+  const kickPlayer = useGameStore((s) => s.kickPlayer);
   const updateLocalProfile = useGameStore((s) => s.updateLocalProfile);
   const setAllowGuestBuild = useGameStore((s) => s.setAllowGuestBuild);
 
@@ -225,10 +227,23 @@ export const RoomAndProfileModals: React.FC = () => {
                   {Object.values(players).map((p) => (
                     <span
                       key={p.id}
-                      className="rounded-full bg-white/8 border px-2.5 py-1 text-xs font-semibold text-white"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-white/8 border px-2.5 py-1 text-xs font-semibold text-white"
                       style={{ borderColor: p.tintColor || '#f472b6' }}
                     >
-                      {p.name}
+                      <span>{p.name}</span>
+                      {p.id === myPlayerId && (
+                        <span className="text-[10px] text-pink-300 font-normal">(Bạn)</span>
+                      )}
+                      {isHost && p.id !== myPlayerId && (
+                        <button
+                          type="button"
+                          onClick={() => kickPlayer(p.id)}
+                          className="ml-1 rounded-full p-0.5 text-slate-400 hover:text-red-300 hover:bg-red-500/20 transition"
+                          title={`Mời ${p.name} ra khỏi phòng`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
                     </span>
                   ))}
                 </div>

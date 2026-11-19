@@ -1471,16 +1471,20 @@ export const IsometricRoomCanvas: React.FC = () => {
           if (!vis) {
             const container = new Container();
             const shadow = new Graphics();
-            shadow.ellipse(0, 0, 16, 7);
-            shadow.fill({ color: 0x090512, alpha: 0.45 });
+            // Ambient soft shadow on floor tile
+            shadow.ellipse(0, 1, 15, 6.5);
+            shadow.fill({ color: 0x090512, alpha: 0.35 });
+            // Darker contact shadow directly under shoe soles
+            shadow.ellipse(0, 1.5, 11, 4.5);
+            shadow.fill({ color: 0x05020a, alpha: 0.45 });
 
             const focusRing = new Graphics();
-            focusRing.ellipse(0, -4, 24, 11);
+            focusRing.ellipse(0, 1, 22, 10);
             focusRing.stroke({ color: 0xf472b6, width: 2, alpha: 0.75 });
             focusRing.visible = false;
 
             const sprite = new Sprite();
-            sprite.anchor.set(0.5, 0.975);
+            sprite.anchor.set(0.5, 0.938);
 
             container.addChild(shadow, focusRing, sprite);
             sortLayer.addChild(container);
