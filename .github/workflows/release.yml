@@ -32,7 +32,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           COMMIT_MSG="$(git log -1 --pretty=%B)"
-          if echo "$COMMIT_MSG" | grep -qiE '\[(skip release|no-release|skip ci)\]'; then
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ] && echo "$COMMIT_MSG" | grep -qiE '\[(skip release|no-release|skip ci)\]'; then
             echo "should_release=false" >> "$GITHUB_OUTPUT"
             echo "Skipping release due to commit flag."
             exit 0
