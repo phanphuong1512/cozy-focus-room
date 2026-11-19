@@ -354,11 +354,13 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
     set({ roomCode: cleanCode });
 
     if (socket) {
-      socket.emit('room:join', {
-        roomCode: cleanCode,
-        hostKey: get().hostKey,
-        player: get().localPlayer,
-      });
+      if (useAuthStore.getState().currentScreen === 'game') {
+        socket.emit('room:join', {
+          roomCode: cleanCode,
+          hostKey: get().hostKey,
+          player: get().localPlayer,
+        });
+      }
       return;
     }
 
@@ -388,12 +390,27 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
       }
       hadConnection = true;
       warnedOffline = false;
-      socket?.emit('room:join', {
-        roomCode: get().roomCode,
-        hostKey: get().hostKey,
-        player: get().localPlayer,
-      });
+      if (useAuthStore.getState().currentScreen === 'game') {
+        const clean = get().roomCode;
+        const isPersonal =
+          clean.startsWith('ROOM_') ||
+          clean.startsWith('MY_') ||
+          clean.startsWith('P_');
+        socket?.emit('room:join', {
+          roomCode: clean,
+          hostKey: get().hostKey,
+          player: get().localPlayer,
+          isPersonal,
+        });
+      }
     });
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', () => {
+        socket?.emit('room:leave');
+        socket?.disconnect();
+      });
+    }
 
     socket.on('disconnect', (reason) => {
       set({ connected: false });
@@ -604,7 +621,14 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
   },
 
   leaveRoomToLobby: () => {
-    set({ buildMode: false, selectedCatalogId: null, movingItemUid: null });
+    socket?.emit('room:leave');
+    set({
+      buildMode: false,
+      selectedCatalogId: null,
+      movingItemUid: null,
+      players: {},
+      ghostPreviews: {},
+    });
     useAuthStore.getState().setScreen('lobby');
   },
 

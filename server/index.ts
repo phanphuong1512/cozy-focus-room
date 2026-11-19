@@ -517,6 +517,8 @@ const io = new Server(server, {
     origin: '*',
     methods: ['GET', 'POST'],
   },
+  pingInterval: 5000,
+  pingTimeout: 6000,
 });
 
 // Periodic pruner for disconnected/ghost sockets (every 10 seconds)
@@ -611,6 +613,18 @@ io.on('connection', (socket) => {
       socket.to(cleanCode).emit('player:joined', { player: newPlayer });
     }
   );
+
+  socket.on('room:leave', () => {
+    const info = socketRoomMap.get(socket.id);
+    if (!info) return;
+    const room = rooms.get(info.roomCode);
+    if (room) {
+      delete room.players[socket.id];
+      socket.to(info.roomCode).emit('player:left', { playerId: socket.id });
+    }
+    socket.leave(info.roomCode);
+    socketRoomMap.delete(socket.id);
+  });
 
   socket.on('room:kick_player', (payload: { playerId: string }) => {
     const info = socketRoomMap.get(socket.id);

@@ -52,29 +52,29 @@ export const LobbyScreen: React.FC = () => {
       }
     };
     fetchHealth();
-    const interval = setInterval(fetchHealth, 8000);
+    const interval = setInterval(fetchHealth, 4000);
     return () => clearInterval(interval);
   }, []);
 
   const handleJoinGeneral = () => {
-    joinRoom('GENERAL');
     setScreen('game');
+    joinRoom('GENERAL');
   };
 
   const handleJoinPersonal = () => {
     if (!user) return;
     const cleanUid = user.uid.replace(/[^a-zA-Z0-9]/g, '').slice(-8).toUpperCase() || 'MYROOM';
     const personalCode = `ROOM_${cleanUid}`;
-    joinRoom(personalCode, { isPersonal: true });
     setScreen('game');
+    joinRoom(personalCode, { isPersonal: true });
   };
 
   const handleJoinCustom = (e: React.FormEvent) => {
     e.preventDefault();
     const clean = customRoom.trim().toUpperCase().slice(0, 24);
     if (!clean) return;
-    joinRoom(clean);
     setScreen('game');
+    joinRoom(clean);
   };
 
   return (

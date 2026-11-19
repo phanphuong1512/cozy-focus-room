@@ -29,8 +29,8 @@ export const App: React.FC = () => {
     const roomFromUrl = params.get('room') || undefined;
 
     if (roomFromUrl && user) {
-      joinRoom(roomFromUrl);
       setScreen('game');
+      joinRoom(roomFromUrl);
     } else {
       initNetwork(roomFromUrl || 'GENERAL');
     }
