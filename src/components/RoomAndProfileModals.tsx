@@ -206,7 +206,7 @@ export const RoomAndProfileModals: React.FC = () => {
                     type="text"
                     value={targetRoom}
                     onChange={(e) => setTargetRoom(e.target.value.toUpperCase())}
-                    placeholder="Ví dụ: FROGGIE, STUDY24..."
+                    placeholder="Ví dụ: GENERAL, STUDY24..."
                     maxLength={16}
                     className="flex-1 rounded-xl bg-white/8 border border-white/15 px-3 py-2 text-sm font-bold uppercase text-white focus:outline-none focus:border-pink-400"
                   />
@@ -396,7 +396,7 @@ export const RoomAndProfileModals: React.FC = () => {
                       value={draftRoom}
                       onChange={(e) => setDraftRoom(e.target.value.toUpperCase())}
                       maxLength={16}
-                      placeholder="FROGGIE"
+                      placeholder="GENERAL"
                       className="w-full rounded-xl bg-white/8 border border-white/15 px-3 py-2 text-xs font-bold uppercase text-pink-200 focus:outline-none focus:border-pink-400"
                     />
                   </div>

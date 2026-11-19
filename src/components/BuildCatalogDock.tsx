@@ -92,6 +92,23 @@ export const BuildCatalogDock: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-1.5">
+          {layout.maxItems ? (
+            <div
+              className={`flex items-center gap-1 rounded-xl px-2.5 py-1 text-xs font-bold border transition ${
+                layout.items.length >= layout.maxItems
+                  ? 'bg-rose-500/25 text-rose-300 border-rose-400/50'
+                  : 'bg-white/8 text-slate-200 border-white/10'
+              }`}
+              title={`Giới hạn nội thất phòng cá nhân: tối đa ${layout.maxItems} món`}
+            >
+              <span>Đồ vật: {layout.items.length}/{layout.maxItems}</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 rounded-xl px-2 py-1 text-[11px] text-slate-400 bg-white/5 border border-white/5">
+              <span>Đồ vật: {layout.items.length}</span>
+            </div>
+          )}
+
           {movingItem && (
             <div className="flex items-center gap-1.5 bg-sky-500/20 border border-sky-400/40 rounded-xl px-2.5 py-1 text-xs text-sky-100">
               <span>Đang di chuyển: <strong>{movingCatalog?.name}</strong></span>
@@ -231,14 +248,19 @@ export const BuildCatalogDock: React.FC = () => {
                 ? { text: 'Mặt bàn chứa đồ', cls: 'bg-amber-500/25 text-amber-200' }
                 : { text: 'Đặt sàn', cls: 'bg-white/10 text-slate-300' };
 
+            const isAtLimit = Boolean(layout.maxItems && layout.items.length >= layout.maxItems && !isSelected);
+
             return (
               <button
                 key={item.id}
+                disabled={isAtLimit}
                 onClick={() => selectCatalogItem(isSelected ? null : item.id)}
-                title={item.description}
+                title={isAtLimit ? `Phòng đã đạt giới hạn tối đa ${layout.maxItems} đồ vật` : item.description}
                 className={`relative flex-shrink-0 w-[132px] flex flex-col items-center justify-between rounded-2xl p-2 border transition text-center ${
                   isSelected
                     ? 'bg-pink-500/25 border-pink-400 shadow-[0_0_16px_rgba(244,114,182,0.35)] -translate-y-0.5'
+                    : isAtLimit
+                    ? 'bg-white/3 border-white/5 opacity-50 cursor-not-allowed'
                     : 'bg-white/5 hover:bg-white/10 border-white/10'
                 }`}
               >

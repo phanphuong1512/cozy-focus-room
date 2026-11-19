@@ -4,6 +4,7 @@ import {
   Copy,
   Crown,
   Headphones,
+  Home,
   ListTodo,
   Lock,
   Maximize2,
@@ -39,6 +40,7 @@ export const TopBar: React.FC = () => {
   const setShowRoomModal = useGameStore((s) => s.setShowRoomModal);
   const toggleAlwaysOnTop = useGameStore((s) => s.toggleAlwaysOnTop);
   const toggleMiniMode = useGameStore((s) => s.toggleMiniMode);
+  const leaveRoomToLobby = useGameStore((s) => s.leaveRoomToLobby);
   const showToast = useGameStore((s) => s.showToast);
 
   const [copied, setCopied] = useState(false);
@@ -103,6 +105,18 @@ export const TopBar: React.FC = () => {
   return (
     <header className="fixed top-3 left-1/2 -translate-x-1/2 z-40 flex flex-wrap items-center justify-center gap-2 max-w-[96vw]">
       <div className="flex items-center gap-2 whitespace-nowrap rounded-full bg-[#181026]/88 backdrop-blur-xl border border-pink-300/30 px-3.5 py-1.5 shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
+        {/* Back to Lobby Button */}
+        <button
+          onClick={leaveRoomToLobby}
+          className="flex items-center gap-1.5 rounded-full bg-white/8 hover:bg-white/15 px-2.5 py-1 text-xs font-semibold text-slate-200 transition shadow-sm"
+          title="Rời phòng về Sảnh Chờ (Lobby)"
+        >
+          <Home className="w-3.5 h-3.5 text-pink-300" />
+          <span className="hidden sm:inline">Sảnh</span>
+        </button>
+
+        <div className="w-px h-4 bg-white/15" />
+
         {/* Room & Multiplayer Status */}
         <button
           onClick={() => setShowRoomModal(true)}

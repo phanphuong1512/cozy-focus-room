@@ -542,7 +542,7 @@ export function getCatalogItem(id: string): CatalogItem | undefined {
 }
 
 export function createDefaultRoomLayout(
-  roomCode = 'FROGGIE',
+  roomCode = 'GENERAL',
   hostId = 'host-local'
 ): RoomLayout {
   const defaultItems: PlacedItem[] = [
@@ -770,5 +770,142 @@ export function createDefaultRoomLayout(
     lightingMode: 'day',
     rainEnabled: false,
     items: defaultItems,
+  };
+}
+
+export function createPersonalRoomLayout(
+  roomCode: string,
+  ownerId = 'host-local',
+  ownerName = 'Chủ phòng'
+): RoomLayout {
+  const starterItems: PlacedItem[] = [
+    // Cửa chính phòng cá nhân
+    {
+      uid: 'p_door',
+      catalogId: 'main_door_b',
+      gx: 6,
+      gy: 13,
+      rotation: 0,
+      flipped: false,
+      layer: 'floor',
+      elevationPx: 0,
+      toggled: false,
+    },
+    // Thảm dưa hấu cửa vào
+    {
+      uid: 'p_mat',
+      catalogId: 'watermelon_mat',
+      gx: 6,
+      gy: 12,
+      rotation: 0,
+      flipped: false,
+      layer: 'floor',
+      elevationPx: 0,
+      toggled: false,
+    },
+    // Kệ giày dép
+    {
+      uid: 'p_shoes',
+      catalogId: 'cabinet_shoes',
+      gx: 4,
+      gy: 13,
+      rotation: 0,
+      flipped: false,
+      layer: 'floor',
+      elevationPx: 0,
+      toggled: false,
+    },
+    // Bàn học tập cá nhân (1x3 dọc tường trái)
+    {
+      uid: 'p_desk',
+      catalogId: 'double_desk',
+      gx: 0,
+      gy: 2,
+      rotation: 0,
+      flipped: false,
+      layer: 'floor',
+      elevationPx: 0,
+      toggled: false,
+    },
+    // Ghế học
+    {
+      uid: 'p_chair',
+      catalogId: 'chair_front',
+      gx: 1,
+      gy: 2,
+      rotation: 0,
+      flipped: false,
+      layer: 'floor',
+      elevationPx: 0,
+      toggled: false,
+    },
+    // Laptop trên bàn
+    {
+      uid: 'p_laptop',
+      catalogId: 'laptop_open',
+      gx: 0,
+      gy: 2,
+      rotation: 0,
+      flipped: false,
+      layer: 'surface',
+      parentSurfaceUid: 'p_desk',
+      elevationPx: 38,
+      toggled: false,
+    },
+    // Cốc cà phê
+    {
+      uid: 'p_coffee',
+      catalogId: 'coffee_mug',
+      gx: 0,
+      gy: 3,
+      rotation: 0,
+      flipped: false,
+      layer: 'surface',
+      parentSurfaceUid: 'p_desk',
+      elevationPx: 38,
+      toggled: false,
+    },
+    // Cây cảnh tạo không gian xanh
+    {
+      uid: 'p_plant',
+      catalogId: 'plant_pot_large',
+      gx: 0,
+      gy: 5,
+      rotation: 0,
+      flipped: false,
+      layer: 'floor',
+      elevationPx: 0,
+      toggled: false,
+    },
+  ];
+
+  return {
+    roomCode,
+    roomName: `Phòng của ${ownerName}`,
+    hostId: ownerId,
+    allowGuestBuild: false,
+    floorMap: [
+      'WWWWWWWWWWWWWW',
+      'WWWWWWWWWWWWWW',
+      'WWCCCCWWWWWWWW',
+      'WWCCCCWWWWWWWW',
+      'WWCCCCWWWWWWWW',
+      'WWWWWWWWWWWWWW',
+      'WWWWWWWWWWWWWW',
+      'WWWWWWWWWWWWWW',
+      'WWWWWWWWWWWWWW',
+      'WWWWWWWWWWWWWW',
+      'WWWWWWWWWWWWWW',
+      'WWWWWWWWWWWWWW',
+      'WWWWWWWWWWWWWW',
+      'WWWWWWWWWWWWWW',
+    ],
+    wallTheme: 'cream',
+    lightingMode: 'day',
+    rainEnabled: false,
+    isPersonal: true,
+    ownerUid: ownerId,
+    maxItems: 30,
+    items: starterItems,
   };
 }

@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { io, Socket } from 'socket.io-client';
-import { createDefaultRoomLayout, getCatalogItem } from '../shared/catalog';
+import { createDefaultRoomLayout, createPersonalRoomLayout, getCatalogItem } from '../shared/catalog';
 import { soundEngine } from '../audio/soundEngine';
+import { useAuthStore } from './useAuthStore';
 import type {
   ActivityType,
   AudioChannel,
@@ -134,7 +135,8 @@ export interface GameStoreState {
 
   // Actions
   initNetwork: (roomCode?: string) => void;
-  joinRoom: (roomCode: string) => void;
+  joinRoom: (roomCode: string, options?: { isPersonal?: boolean }) => void;
+  leaveRoomToLobby: () => void;
   showToast: (msg: string) => void;
   setShowAudioMixer: (v: boolean) => void;
   setShowFocusPanel: (v: boolean) => void;
@@ -260,8 +262,8 @@ const savedMixer = loadJsonStorage<AudioMixerState>('cozy_audio_mixer', {
 soundEngine.applyMixerState(savedMixer);
 
 const initialLayout = loadJsonStorage<RoomLayout>(
-  'cozy_offline_layout_v2_FROGGIE',
-  createDefaultRoomLayout('FROGGIE', initialHostKey)
+  'cozy_offline_layout_v2_GENERAL',
+  createDefaultRoomLayout('GENERAL', initialHostKey)
 );
 
 const initialLocalPlayer: PlayerState = {
@@ -282,7 +284,7 @@ let toastTimer: number | null = null;
 
 export const useGameStore = create<GameStoreState>((set, get) => ({
   connected: false,
-  roomCode: 'FROGGIE',
+  roomCode: 'GENERAL',
   hostKey: initialHostKey,
   myPlayerId: 'local-player',
   isHost: true,
@@ -337,7 +339,7 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
   setShowProfileModal: (v) => set({ showProfileModal: v }),
 
   initNetwork: (roomCode = get().roomCode) => {
-    const cleanCode = roomCode.trim().toUpperCase().slice(0, 16) || 'FROGGIE';
+    const cleanCode = roomCode.trim().toUpperCase().slice(0, 24) || 'GENERAL';
     set({ roomCode: cleanCode });
 
     if (socket) {
@@ -546,22 +548,32 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
     });
   },
 
-  joinRoom: (roomCode: string) => {
-    const clean = roomCode.trim().toUpperCase().slice(0, 16) || 'FROGGIE';
+  joinRoom: (roomCode: string, options?: { isPersonal?: boolean }) => {
+    const clean = roomCode.trim().toUpperCase().slice(0, 24) || 'GENERAL';
     set({ buildMode: false, selectedCatalogId: null, movingItemUid: null });
+
+    const isPersonal = Boolean(
+      options?.isPersonal ||
+      clean.startsWith('ROOM_') ||
+      clean.startsWith('MY_') ||
+      clean.startsWith('P_')
+    );
 
     if (socket && socket.connected) {
       socket.emit('room:join', {
         roomCode: clean,
         hostKey: get().hostKey,
         player: get().localPlayer,
+        isPersonal,
       });
     } else {
-      // Not connected yet: remember the target room so the 'connect' handler
-      // joins it as soon as the server is reachable.
+      const fallbackLayout = isPersonal
+        ? createPersonalRoomLayout(clean, get().hostKey, get().localPlayer.name)
+        : createDefaultRoomLayout(clean, get().hostKey);
+
       const offline = loadJsonStorage<RoomLayout>(
         `cozy_offline_layout_v2_${clean}`,
-        createDefaultRoomLayout(clean, get().hostKey)
+        fallbackLayout
       );
       set({
         roomCode: clean,
@@ -578,6 +590,11 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
       return;
     }
     get().showToast(`Đang vào phòng #${clean}`);
+  },
+
+  leaveRoomToLobby: () => {
+    set({ buildMode: false, selectedCatalogId: null, movingItemUid: null });
+    useAuthStore.getState().setScreen('lobby');
   },
 
   updateLocalProfile: (patch) => {
@@ -972,9 +989,15 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
 
   placeOrUpdateItem: (item) => {
     if (!get().canBuild()) return;
-    soundEngine.playSfx('interact');
     const layout = get().layout;
     const exists = layout.items.some((i) => i.uid === item.uid);
+
+    if (!exists && layout.maxItems && layout.items.length >= layout.maxItems) {
+      get().showToast(`⚠️ Đã đạt giới hạn tối đa ${layout.maxItems} đồ vật trong phòng!`);
+      return;
+    }
+
+    soundEngine.playSfx('interact');
     let nextItems: PlacedItem[];
 
     if (exists) {
@@ -1053,7 +1076,10 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
 
   resetDefaultRoom: () => {
     if (!get().isHost) return;
-    const nextLayout = createDefaultRoomLayout(get().roomCode, get().hostKey);
+    const cur = get().layout;
+    const nextLayout = cur.isPersonal
+      ? createPersonalRoomLayout(get().roomCode, get().hostKey, get().localPlayer.name)
+      : createDefaultRoomLayout(get().roomCode, get().hostKey);
     set({ layout: nextLayout, movingItemUid: null, selectedCatalogId: null });
     saveJsonStorage(`cozy_offline_layout_v2_${nextLayout.roomCode}`, nextLayout);
     socket?.emit('room:reset_default');

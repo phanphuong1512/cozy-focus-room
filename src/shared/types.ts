@@ -112,6 +112,9 @@ export interface RoomLayout {
   lightingMode: LightingMode;
   rainEnabled: boolean;
   items: PlacedItem[];
+  isPersonal?: boolean;
+  ownerUid?: string;
+  maxItems?: number;
 }
 
 export interface PlayerChatBubble {

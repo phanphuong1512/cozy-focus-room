@@ -4,7 +4,7 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import { Server } from 'socket.io';
-import { createDefaultRoomLayout } from '../src/shared/catalog.ts';
+import { createDefaultRoomLayout, createPersonalRoomLayout } from '../src/shared/catalog.ts';
 import type {
   GhostPreview,
   PlacedItem,
@@ -56,9 +56,9 @@ function loadRoomsFromDisk() {
     console.error('[server] Failed to load rooms.json:', err);
   }
 
-  if (!rooms.has('FROGGIE')) {
-    rooms.set('FROGGIE', {
-      layout: createDefaultRoomLayout('FROGGIE', 'host-local'),
+  if (!rooms.has('GENERAL')) {
+    rooms.set('GENERAL', {
+      layout: createDefaultRoomLayout('GENERAL', 'host-local'),
       players: {},
       pomodoro: createDefaultPomodoro(),
     });
@@ -79,12 +79,27 @@ function saveRoomsToDisk() {
   }
 }
 
-function getOrCreateRoom(roomCode: string, hostKey: string): RoomRuntime {
-  const cleanCode = roomCode.trim().toUpperCase().slice(0, 16) || 'FROGGIE';
+function getOrCreateRoom(
+  roomCode: string,
+  hostKey: string,
+  ownerName?: string,
+  isPersonal?: boolean
+): RoomRuntime {
+  const cleanCode = roomCode.trim().toUpperCase().slice(0, 24) || 'GENERAL';
   let runtime = rooms.get(cleanCode);
   if (!runtime) {
+    const isPersonalRoom =
+      Boolean(isPersonal) ||
+      cleanCode.startsWith('ROOM_') ||
+      cleanCode.startsWith('MY_') ||
+      cleanCode.startsWith('P_');
+
+    const layout = isPersonalRoom
+      ? createPersonalRoomLayout(cleanCode, hostKey, ownerName || 'Chủ phòng')
+      : createDefaultRoomLayout(cleanCode, hostKey);
+
     runtime = {
-      layout: createDefaultRoomLayout(cleanCode, hostKey),
+      layout,
       players: {},
       pomodoro: createDefaultPomodoro(),
     };
@@ -235,10 +250,16 @@ io.on('connection', (socket) => {
       }
 
       const cleanCode =
-        (payload.roomCode || 'FROGGIE').trim().toUpperCase().slice(0, 16) ||
-        'FROGGIE';
+        (payload.roomCode || 'GENERAL').trim().toUpperCase().slice(0, 24) ||
+        'GENERAL';
       const hostKey = payload.hostKey || socket.id;
-      const room = getOrCreateRoom(cleanCode, hostKey);
+      const isPersonal = Boolean(
+        (payload as any).isPersonal ||
+        cleanCode.startsWith('ROOM_') ||
+        cleanCode.startsWith('MY_') ||
+        cleanCode.startsWith('P_')
+      );
+      const room = getOrCreateRoom(cleanCode, hostKey, payload.player?.name, isPersonal);
 
       // If registered host is not currently in this room, grant host role to this player
       const activeHostOnline = Array.from(socketRoomMap.values()).some(
@@ -420,6 +441,10 @@ io.on('connection', (socket) => {
         }
       }
     } else {
+      if (room.layout.maxItems && room.layout.items.length >= room.layout.maxItems) {
+        socket.emit('room:toast', { message: `Đã đạt giới hạn tối đa ${room.layout.maxItems} đồ vật trong phòng!` });
+        return;
+      }
       room.layout.items.push(incoming);
     }
 

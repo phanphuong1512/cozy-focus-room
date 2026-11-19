@@ -7,17 +7,37 @@ import { AudioMixerModal } from './components/AudioMixerModal';
 import { ChatEmoteBar } from './components/ChatEmoteBar';
 import { RoomAndProfileModals } from './components/RoomAndProfileModals';
 import { UpdateBanner } from './components/UpdateBanner';
+import { LoginScreen } from './components/LoginScreen';
+import { LobbyScreen } from './components/LobbyScreen';
+import { useAuthStore } from './store/useAuthStore';
 import { useGameStore } from './store/useGameStore';
 
 export const App: React.FC = () => {
+  const currentScreen = useAuthStore((s) => s.currentScreen);
+  const user = useAuthStore((s) => s.user);
+  const setScreen = useAuthStore((s) => s.setScreen);
+
   const initNetwork = useGameStore((s) => s.initNetwork);
+  const joinRoom = useGameStore((s) => s.joinRoom);
   const tickPomodoro = useGameStore((s) => s.tickPomodoro);
   const toastMessage = useGameStore((s) => s.toastMessage);
+  const updateLocalProfile = useGameStore((s) => s.updateLocalProfile);
 
   useEffect(() => {
+    // If URL contains ?room=XYZ and user is authenticated, jump straight to that room
     const params = new URLSearchParams(window.location.search);
     const roomFromUrl = params.get('room') || undefined;
-    initNetwork(roomFromUrl);
+
+    if (roomFromUrl && user) {
+      joinRoom(roomFromUrl);
+      setScreen('game');
+    } else {
+      initNetwork(roomFromUrl || 'GENERAL');
+    }
+
+    if (user?.name) {
+      updateLocalProfile({ name: user.name });
+    }
 
     const timer = window.setInterval(() => {
       tickPomodoro();
@@ -26,17 +46,31 @@ export const App: React.FC = () => {
     return () => {
       window.clearInterval(timer);
     };
-  }, [initNetwork, tickPomodoro]);
+  }, [initNetwork, joinRoom, setScreen, tickPomodoro, updateLocalProfile, user]);
 
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-[#120d1d]">
-      <IsometricRoomCanvas />
-      <TopBar />
-      <FocusPanel />
-      <BuildCatalogDock />
-      <AudioMixerModal />
-      <ChatEmoteBar />
-      <RoomAndProfileModals />
+      {currentScreen === 'login' && <LoginScreen />}
+
+      {currentScreen === 'lobby' && (
+        <>
+          <LobbyScreen />
+          <RoomAndProfileModals />
+        </>
+      )}
+
+      {currentScreen === 'game' && (
+        <>
+          <IsometricRoomCanvas />
+          <TopBar />
+          <FocusPanel />
+          <BuildCatalogDock />
+          <AudioMixerModal />
+          <ChatEmoteBar />
+          <RoomAndProfileModals />
+        </>
+      )}
+
       <UpdateBanner />
 
       {toastMessage && (
