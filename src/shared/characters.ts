@@ -31,7 +31,34 @@ export const SKIN_TONES: { label: string; color: string }[] = [
   { label: 'Pastel', color: '#e2d4f0' },
 ];
 
+export const SPRITE_HAIR_STYLES: HairStyleId[] = [
+  'girl_long',
+  'girl_ponytail',
+  'girl_bob',
+];
+
+export function isSpriteHairStyle(style: HairStyleId): boolean {
+  return SPRITE_HAIR_STYLES.includes(style);
+}
+
+export function getHairSpritePath(style: HairStyleId, isBack: boolean): string | null {
+  if (!isSpriteHairStyle(style)) return null;
+  return `/sprites/characters/hair/${style}_${isBack ? 'nw' : 'se'}.png`;
+}
+
+export function getAllHairSpritePaths(): string[] {
+  const paths: string[] = [];
+  for (const id of SPRITE_HAIR_STYLES) {
+    paths.push(`/sprites/characters/hair/${id}_se.png`);
+    paths.push(`/sprites/characters/hair/${id}_nw.png`);
+  }
+  return paths;
+}
+
 export const HAIR_STYLES: { id: HairStyleId; label: string }[] = [
+  { id: 'girl_long', label: 'Nữ tóc dài' },
+  { id: 'girl_ponytail', label: 'Nữ buộc cao' },
+  { id: 'girl_bob', label: 'Nữ tóc ngắn' },
   { id: 'short', label: 'Tóc ngắn' },
   { id: 'bob', label: 'Tóc bob' },
   { id: 'ponytail', label: 'Đuôi ngựa' },
@@ -42,6 +69,7 @@ export const HAIR_STYLES: { id: HairStyleId; label: string }[] = [
 ];
 
 export const HAIR_COLORS: string[] = [
+  'original', // Màu gốc của sprite tóc
   '#272026', // Đen than
   '#5c3a21', // Nâu hạt dẻ
   '#c48a47', // Vàng mật ong

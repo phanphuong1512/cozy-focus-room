@@ -45,7 +45,10 @@ export type HairStyleId =
   | 'ponytail'
   | 'spiky'
   | 'bun'
-  | 'long';
+  | 'long'
+  | 'girl_long'
+  | 'girl_ponytail'
+  | 'girl_bob';
 
 export type EyeStyleId = 'cute' | 'happy' | 'cool' | 'sleepy' | 'wink';
 

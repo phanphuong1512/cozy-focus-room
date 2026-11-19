@@ -26,6 +26,8 @@ import {
 import {
   DEFAULT_CUSTOM_AVATAR,
   getAllCharacterSpritePaths,
+  getAllHairSpritePaths,
+  getHairSpritePath,
   isIsoCharacter,
   resolveIsoCharacterFrame,
 } from '../shared/characters';
@@ -237,7 +239,7 @@ export const IsometricRoomCanvas: React.FC = () => {
         const img = new Image();
         img.onload = () => {
           try {
-            if (url.includes('/sprites/characters/base/')) {
+            if (url.includes('/sprites/characters/base/') || url.includes('/sprites/characters/hair/')) {
               baseImageMap.set(url, img);
             }
             const tex = Texture.from(img);
@@ -252,7 +254,7 @@ export const IsometricRoomCanvas: React.FC = () => {
           const fallbackImg = new Image();
           fallbackImg.onload = () => {
             try {
-              if (url.includes('/sprites/characters/base/')) {
+              if (url.includes('/sprites/characters/base/') || url.includes('/sprites/characters/hair/')) {
                 baseImageMap.set(url, fallbackImg);
               }
               const tex = Texture.from(fallbackImg);
@@ -292,6 +294,7 @@ export const IsometricRoomCanvas: React.FC = () => {
         '/sprites/tiles/floor_tiles.png',
         '/sprites/ui_vfx/vfx_dust_cloud.png',
         ...getAllCharacterSpritePaths(),
+        ...getAllHairSpritePaths(),
       ]);
       for (const item of CATALOG_ITEMS) {
         paths.add(item.sprite);
@@ -1823,10 +1826,15 @@ export const IsometricRoomCanvas: React.FC = () => {
             if (!customTex) {
               const baseImg = baseImageMap.get(resolved.path);
               if (baseImg) {
+                const frameCtx = parseFrameContext(resolved.path);
+                const hairPath = getHairSpritePath(cfg.hairStyle, frameCtx.isBack);
+                const hairImg = hairPath ? baseImageMap.get(hairPath) || null : null;
                 const canvasEl = renderCustomAvatarToCanvas(
                   baseImg,
                   cfg,
-                  parseFrameContext(resolved.path)
+                  frameCtx,
+                  undefined,
+                  hairImg
                 );
                 customTex = Texture.from(canvasEl);
                 customTex.source.style.scaleMode = 'nearest';

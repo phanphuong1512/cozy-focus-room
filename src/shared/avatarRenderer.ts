@@ -59,7 +59,8 @@ export function renderCustomAvatarToCanvas(
   baseImg: HTMLImageElement,
   config: CustomAvatarConfig,
   frameCtx: AvatarFrameContext,
-  targetCanvas?: HTMLCanvasElement
+  targetCanvas?: HTMLCanvasElement,
+  hairImg?: HTMLImageElement | null
 ): HTMLCanvasElement {
   const canvas = targetCanvas || document.createElement('canvas');
   canvas.width = W;
@@ -101,8 +102,9 @@ export function renderCustomAvatarToCanvas(
   const topLight = shadeHex(config.topColor, 1.15);
   const botDark = shadeHex(config.bottomColor, 0.72);
   const shoeDark = shadeHex(config.shoeColor, 0.72);
-  const hairDark = shadeHex(config.hairColor, 0.7);
-  const hairLight = shadeHex(config.hairColor, 1.2);
+  const hairHex = config.hairColor === 'original' ? '#5c3a21' : config.hairColor;
+  const hairDark = shadeHex(hairHex, 0.7);
+  const hairLight = shadeHex(hairHex, 1.2);
 
   // 2. Shoes & Bottoms (Pants / Skirt)
   if (frameCtx.isSitting) {
@@ -237,50 +239,79 @@ export function renderCustomAvatarToCanvas(
   }
 
   // 5. Hair Layer
-  if (config.hairStyle !== 'none') {
+  if (hairImg) {
+    const dx = frameCtx.isSitting ? -4 : 0;
+    if (config.hairColor === 'original') {
+      ctx.drawImage(hairImg, dx, 0, W, H);
+    } else {
+      const hairCanvas = document.createElement('canvas');
+      hairCanvas.width = W;
+      hairCanvas.height = H;
+      const hctx = hairCanvas.getContext('2d')!;
+      hctx.imageSmoothingEnabled = false;
+      hctx.drawImage(hairImg, 0, 0, W, H);
+      const imgData = hctx.getImageData(0, 0, W, H);
+      const data = imgData.data;
+      const [tr, tg, tb] = hexToRgb(hairHex);
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] < 20) continue;
+        const r = data[i], g = data[i + 1], b = data[i + 2];
+        // Preserve dark outer outlines
+        if (r < 32 && g < 32 && b < 32) continue;
+        // Luminance-preserving tint so highlights & shadows remain crisp
+        const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 140;
+        const factor = Math.max(0.35, Math.min(1.45, lum));
+        data[i] = Math.max(0, Math.min(255, Math.round(tr * factor)));
+        data[i + 1] = Math.max(0, Math.min(255, Math.round(tg * factor)));
+        data[i + 2] = Math.max(0, Math.min(255, Math.round(tb * factor)));
+      }
+      hctx.putImageData(imgData, 0, 0);
+      ctx.drawImage(hairCanvas, dx, 0);
+    }
+  } else if (config.hairStyle !== 'none') {
     if (frameCtx.isBack) {
       // Back of head hair coverage
       px(ctx, hx - 12, hy - 14, 24, 18, OUTLINE);
-      px(ctx, hx - 11, hy - 13, 22, 16, config.hairColor);
+      px(ctx, hx - 11, hy - 13, 22, 16, hairHex);
       px(ctx, hx - 9, hy - 11, 18, 3, hairLight);
       px(ctx, hx - 11, hy, 22, 4, hairDark);
     } else {
       // Top cap + bangs
       px(ctx, hx - 12, hy - 15, 24, 10, OUTLINE);
-      px(ctx, hx - 11, hy - 14, 22, 8, config.hairColor);
+      px(ctx, hx - 11, hy - 14, 22, 8, hairHex);
       px(ctx, hx - 7, hy - 12, 14, 2, hairLight);
       // Side locks framing face
       px(ctx, hx - 12, hy - 7, 5, 11, OUTLINE);
-      px(ctx, hx - 11, hy - 7, 3, 10, config.hairColor);
+      px(ctx, hx - 11, hy - 7, 3, 10, hairHex);
       // Front bangs
       px(ctx, hx - 8, hy - 6, 18, 4, OUTLINE);
-      px(ctx, hx - 7, hy - 6, 16, 3, config.hairColor);
+      px(ctx, hx - 7, hy - 6, 16, 3, hairHex);
     }
 
     if (config.hairStyle === 'spiky') {
-      px(ctx, hx - 10, hy - 18, 4, 4, config.hairColor);
-      px(ctx, hx - 2, hy - 19, 5, 5, config.hairColor);
-      px(ctx, hx + 6, hy - 17, 4, 4, config.hairColor);
+      px(ctx, hx - 10, hy - 18, 4, 4, hairHex);
+      px(ctx, hx - 2, hy - 19, 5, 5, hairHex);
+      px(ctx, hx + 6, hy - 17, 4, 4, hairHex);
     } else if (config.hairStyle === 'bob') {
       px(ctx, hx - 13, hy - 2, 5, 14, OUTLINE);
-      px(ctx, hx - 12, hy - 2, 3, 13, config.hairColor);
+      px(ctx, hx - 12, hy - 2, 3, 13, hairHex);
       if (frameCtx.isBack) {
-        px(ctx, hx - 11, hy + 2, 22, 8, config.hairColor);
+        px(ctx, hx - 11, hy + 2, 22, 8, hairHex);
       }
     } else if (config.hairStyle === 'long') {
       px(ctx, hx - 13, hy - 2, 5, 22, OUTLINE);
-      px(ctx, hx - 12, hy - 2, 3, 20, config.hairColor);
+      px(ctx, hx - 12, hy - 2, 3, 20, hairHex);
       if (frameCtx.isBack) {
         px(ctx, hx - 11, hy + 2, 22, 18, OUTLINE);
-        px(ctx, hx - 10, hy + 2, 20, 17, config.hairColor);
+        px(ctx, hx - 10, hy + 2, 20, 17, hairHex);
       }
     } else if (config.hairStyle === 'ponytail') {
       px(ctx, hx - 15, hy - 10, 5, 14, OUTLINE);
-      px(ctx, hx - 14, hy - 9, 3, 12, config.hairColor);
+      px(ctx, hx - 14, hy - 9, 3, 12, hairHex);
       px(ctx, hx - 13, hy - 10, 2, 2, '#f472b6');
     } else if (config.hairStyle === 'bun') {
       px(ctx, hx - 5, hy - 20, 10, 6, OUTLINE);
-      px(ctx, hx - 4, hy - 19, 8, 4, config.hairColor);
+      px(ctx, hx - 4, hy - 19, 8, 4, hairHex);
       px(ctx, hx - 2, hy - 18, 4, 1, hairLight);
     }
   }

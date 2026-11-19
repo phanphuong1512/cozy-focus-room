@@ -10,6 +10,8 @@ import {
   HAIR_STYLES,
   SKIN_TONES,
   TOP_STYLES,
+  getHairSpritePath,
+  isSpriteHairStyle,
   resolveIsoCharacterFrame,
 } from '../shared/characters';
 import { parseFrameContext, renderCustomAvatarToCanvas } from '../shared/avatarRenderer';
@@ -160,17 +162,43 @@ export const RoomAndProfileModals: React.FC = () => {
   useEffect(() => {
     if (!showProfileModal || draftOutfit !== 'custom') return;
     let cancelled = false;
-    const img = new Image();
-    img.onload = () => {
-      if (cancelled || !previewCanvasRef.current) return;
+    const frameCtx = parseFrameContext(resolvedPreview.path);
+    const hairPath = getHairSpritePath(draftCustomAvatar.hairStyle, frameCtx.isBack);
+
+    const baseImg = new Image();
+    const hairImg = hairPath ? new Image() : null;
+    let baseReady = false;
+    let hairReady = !hairImg;
+
+    const tryDraw = () => {
+      if (cancelled || !baseReady || !hairReady || !previewCanvasRef.current) return;
       renderCustomAvatarToCanvas(
-        img,
+        baseImg,
         draftCustomAvatar,
-        parseFrameContext(resolvedPreview.path),
-        previewCanvasRef.current
+        frameCtx,
+        previewCanvasRef.current,
+        hairImg
       );
     };
-    img.src = resolvedPreview.path;
+
+    baseImg.onload = () => {
+      baseReady = true;
+      tryDraw();
+    };
+    baseImg.src = resolvedPreview.path;
+
+    if (hairImg && hairPath) {
+      hairImg.onload = () => {
+        hairReady = true;
+        tryDraw();
+      };
+      hairImg.onerror = () => {
+        hairReady = true;
+        tryDraw();
+      };
+      hairImg.src = hairPath;
+    }
+
     return () => {
       cancelled = true;
     };
@@ -489,7 +517,11 @@ export const RoomAndProfileModals: React.FC = () => {
                               key={hs.id}
                               type="button"
                               onClick={() =>
-                                setDraftCustomAvatar((c) => ({ ...c, hairStyle: hs.id }))
+                                setDraftCustomAvatar((c) => ({
+                                  ...c,
+                                  hairStyle: hs.id,
+                                  hairColor: isSpriteHairStyle(hs.id) ? 'original' : c.hairColor === 'original' ? '#272026' : c.hairColor,
+                                }))
                               }
                               className={`rounded-lg px-2 py-1 text-[11px] border transition ${
                                 draftCustomAvatar.hairStyle === hs.id
@@ -503,21 +535,38 @@ export const RoomAndProfileModals: React.FC = () => {
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className="text-[10px] text-slate-400 mr-1">Màu tóc:</span>
-                          {HAIR_COLORS.map((col) => (
-                            <button
-                              key={col}
-                              type="button"
-                              onClick={() =>
-                                setDraftCustomAvatar((c) => ({ ...c, hairColor: col }))
-                              }
-                              className={`w-5 h-5 rounded-full border-2 transition ${
-                                draftCustomAvatar.hairColor === col
-                                  ? 'border-white scale-110'
-                                  : 'border-transparent opacity-80 hover:opacity-100'
-                              }`}
-                              style={{ backgroundColor: col }}
-                            />
-                          ))}
+                          {HAIR_COLORS.map((col) =>
+                            col === 'original' ? (
+                              <button
+                                key={col}
+                                type="button"
+                                onClick={() =>
+                                  setDraftCustomAvatar((c) => ({ ...c, hairColor: col }))
+                                }
+                                className={`rounded-full px-2 py-0.5 text-[10px] border transition ${
+                                  draftCustomAvatar.hairColor === col
+                                    ? 'bg-pink-500/30 border-white text-white font-semibold'
+                                    : 'bg-white/10 border-white/15 text-slate-300 hover:bg-white/20'
+                                }`}
+                              >
+                                Gốc
+                              </button>
+                            ) : (
+                              <button
+                                key={col}
+                                type="button"
+                                onClick={() =>
+                                  setDraftCustomAvatar((c) => ({ ...c, hairColor: col }))
+                                }
+                                className={`w-5 h-5 rounded-full border-2 transition ${
+                                  draftCustomAvatar.hairColor === col
+                                    ? 'border-white scale-110'
+                                    : 'border-transparent opacity-80 hover:opacity-100'
+                                }`}
+                                style={{ backgroundColor: col }}
+                              />
+                            )
+                          )}
                         </div>
                       </div>
                     )}
