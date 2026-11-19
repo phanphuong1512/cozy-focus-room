@@ -5,6 +5,8 @@ import fs from 'fs';
 import path from 'path';
 import { Server } from 'socket.io';
 import { createDefaultRoomLayout, createPersonalRoomLayout } from '../src/shared/catalog.ts';
+import pg from 'pg';
+const { Pool } = pg;
 import type {
   GhostPreview,
   PlacedItem,
@@ -18,6 +20,26 @@ const DATA_DIR = process.env.DATA_DIR
   ? path.resolve(process.env.DATA_DIR)
   : path.resolve(process.cwd(), 'server', 'data');
 const ROOMS_FILE = path.join(DATA_DIR, 'rooms.json');
+
+const DATABASE_URL = (process.env.DATABASE_URL || '').trim();
+let dbPool: pg.Pool | null = null;
+
+if (DATABASE_URL) {
+  try {
+    dbPool = new Pool({
+      connectionString: DATABASE_URL,
+      ssl:
+        DATABASE_URL.includes('railway.internal') ||
+        DATABASE_URL.includes('localhost') ||
+        DATABASE_URL.includes('127.0.0.1')
+          ? false
+          : { rejectUnauthorized: false },
+    });
+    console.log('[db] PostgreSQL pool configured with DATABASE_URL.');
+  } catch (err) {
+    console.error('[db] Error configuring PostgreSQL pool:', err);
+  }
+}
 
 interface RoomRuntime {
   layout: RoomLayout;
@@ -55,18 +77,56 @@ function loadRoomsFromDisk() {
   } catch (err) {
     console.error('[server] Failed to load rooms.json:', err);
   }
+}
+
+async function initDatabaseAndLoadRooms() {
+  loadRoomsFromDisk();
+
+  if (dbPool) {
+    try {
+      const client = await dbPool.connect();
+      try {
+        console.log('[db] Connected to PostgreSQL on Railway!');
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS rooms (
+            code VARCHAR(32) PRIMARY KEY,
+            layout JSONB NOT NULL,
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+          );
+        `);
+        console.log('[db] Table "rooms" ready.');
+
+        const result = await client.query('SELECT code, layout FROM rooms');
+        for (const row of result.rows) {
+          const code = String(row.code);
+          const layout = row.layout as RoomLayout;
+          rooms.set(code, {
+            layout,
+            players: {},
+            pomodoro: createDefaultPomodoro(),
+          });
+        }
+        console.log(`[db] Restored ${result.rows.length} rooms from PostgreSQL.`);
+      } finally {
+        client.release();
+      }
+    } catch (err) {
+      console.error('[db] Failed to initialize PostgreSQL:', err);
+    }
+  }
 
   if (!rooms.has('GENERAL')) {
+    const defaultGen = createDefaultRoomLayout('GENERAL', 'host-local');
     rooms.set('GENERAL', {
-      layout: createDefaultRoomLayout('GENERAL', 'host-local'),
+      layout: defaultGen,
       players: {},
       pomodoro: createDefaultPomodoro(),
     });
-    saveRoomsToDisk();
+    persistRoom('GENERAL', defaultGen);
   }
 }
 
-function saveRoomsToDisk() {
+function saveRoomsToDisk(targetCode?: string) {
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
     const serialized: Record<string, RoomLayout> = {};
@@ -76,6 +136,40 @@ function saveRoomsToDisk() {
     fs.writeFileSync(ROOMS_FILE, JSON.stringify(serialized, null, 2), 'utf-8');
   } catch (err) {
     console.error('[server] Failed to save rooms.json:', err);
+  }
+
+  // Also sync to PostgreSQL if connected
+  if (targetCode) {
+    const room = rooms.get(targetCode);
+    if (room) saveRoomToDatabase(targetCode, room.layout);
+  } else {
+    for (const [code, runtime] of rooms.entries()) {
+      saveRoomToDatabase(code, runtime.layout);
+    }
+  }
+}
+
+async function saveRoomToDatabase(code: string, layout: RoomLayout) {
+  if (!dbPool) return;
+  try {
+    await dbPool.query(
+      `INSERT INTO rooms (code, layout, updated_at)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (code)
+       DO UPDATE SET layout = $2, updated_at = NOW();`,
+      [code, JSON.stringify(layout)]
+    );
+  } catch (err) {
+    console.error(`[db] Failed to save room ${code} to PostgreSQL:`, err);
+  }
+}
+
+function persistRoom(code: string, layout?: RoomLayout) {
+  saveRoomsToDisk();
+  const room = rooms.get(code);
+  const targetLayout = layout || room?.layout;
+  if (targetLayout) {
+    saveRoomToDatabase(code, targetLayout).catch(() => {});
   }
 }
 
@@ -104,15 +198,15 @@ function getOrCreateRoom(
       pomodoro: createDefaultPomodoro(),
     };
     rooms.set(cleanCode, runtime);
-    saveRoomsToDisk();
+    persistRoom(cleanCode, layout);
   } else if (runtime.layout.hostId === 'host-local' && hostKey) {
     runtime.layout.hostId = hostKey;
-    saveRoomsToDisk();
+    persistRoom(cleanCode);
   }
   return runtime;
 }
 
-loadRoomsFromDisk();
+initDatabaseAndLoadRooms();
 
 const app = express();
 app.use(cors());
@@ -135,6 +229,7 @@ app.get('/api/health', (_req, res) => {
     ok: true,
     rooms: rooms.size,
     players: totalPlayers,
+    database: dbPool ? 'postgresql' : 'file_fallback',
     uptimeSec: Math.round(process.uptime()),
   });
 });
