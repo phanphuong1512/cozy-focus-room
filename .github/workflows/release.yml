@@ -246,16 +246,21 @@ jobs:
 
           gh release upload "$TAG" latest.json --repo "$GITHUB_REPOSITORY" --clobber
           
-          NOTES="### Cài đặt Cozy Focus Room
+          BASE="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG"
+          ORIGINAL_BODY="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body -q .body)"
+          {
+            echo "### Cài đặt Cozy Focus Room"
+            echo ""
+            echo "| Hệ điều hành | File tải về | Mô tả |"
+            echo "| :--- | :--- | :--- |"
+            echo "| **macOS** | [Cozy.Focus.Room_${VERSION}_universal.dmg]($BASE/Cozy.Focus.Room_${VERSION}_universal.dmg) | Dành cho macOS (hỗ trợ cả Apple Silicon và Intel) |"
+            echo "| **Windows** | [Cozy.Focus.Room_${VERSION}_x64-setup.exe]($BASE/Cozy.Focus.Room_${VERSION}_x64-setup.exe) | Bộ cài đặt tiêu chuẩn cho Windows 10/11 |"
+            echo ""
+            echo "*Lưu ý: Các file còn lại (.tar.gz, .sig, latest.json) là tệp hệ thống phục vụ cơ chế tự động cập nhật, người dùng không cần tải thủ công.*"
+            echo ""
+            echo "#### Ghi chú phát hành"
+            echo ""
+            echo "$ORIGINAL_BODY"
+          } > release_notes.md
 
-| Hệ điều hành | File tải về | Mô tả |
-| :--- | :--- | :--- |
-| **macOS** | [Cozy.Focus.Room_${VERSION}_universal.dmg](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/Cozy.Focus.Room_${VERSION}_universal.dmg) | Dành cho macOS (hỗ trợ cả Apple Silicon và Intel) |
-| **Windows** | [Cozy.Focus.Room_${VERSION}_x64-setup.exe](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/Cozy.Focus.Room_${VERSION}_x64-setup.exe) | Bộ cài đặt tiêu chuẩn cho Windows 10/11 |
-
-*Lưu ý: Các file còn lại (\`.tar.gz\`, \`.sig\`, \`latest.json\`) là tệp hệ thống phục vụ cơ chế tự động cập nhật ngầm (Auto-Updater), người dùng không cần tải thủ công.*
-
-#### Ghi chú phát hành:
-$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body -q .body)"
-
-          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes "$NOTES" --draft=false --latest
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file release_notes.md --draft=false --latest

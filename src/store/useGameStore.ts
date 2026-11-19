@@ -348,14 +348,27 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
       set({ connected: false });
       return;
     }
+    // The hosted server can be asleep (Railway serverless) and needs a cold
+    // start, so never give up reconnecting and allow a generous timeout.
     socket = io(url, {
       transports: ['websocket', 'polling'],
-      reconnectionAttempts: 5,
-      timeout: 4000,
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
     });
+
+    let hadConnection = false;
+    let warnedOffline = false;
 
     socket.on('connect', () => {
       set({ connected: true });
+      if (hadConnection || warnedOffline) {
+        get().showToast('Đã kết nối lại máy chủ');
+      }
+      hadConnection = true;
+      warnedOffline = false;
       socket?.emit('room:join', {
         roomCode: get().roomCode,
         hostKey: get().hostKey,
@@ -363,12 +376,20 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
       });
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', (reason) => {
       set({ connected: false });
+      // A server-initiated disconnect is not retried automatically by socket.io.
+      if (reason === 'io server disconnect') {
+        socket?.connect();
+      }
     });
 
     socket.on('connect_error', () => {
       set({ connected: false });
+      if (!warnedOffline) {
+        warnedOffline = true;
+        get().showToast('Đang kết nối tới máy chủ, vui lòng đợi...');
+      }
     });
 
     socket.on(
@@ -526,6 +547,8 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
         player: get().localPlayer,
       });
     } else {
+      // Not connected yet: remember the target room so the 'connect' handler
+      // joins it as soon as the server is reachable.
       const offline = loadJsonStorage<RoomLayout>(
         `cozy_offline_layout_v2_${clean}`,
         createDefaultRoomLayout(clean, get().hostKey)
@@ -533,10 +556,18 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
       set({
         roomCode: clean,
         layout: offline,
+        players: {},
         isHost: offline.hostId === get().hostKey,
       });
+      if (!socket) {
+        get().initNetwork(clean);
+      } else if (!socket.active) {
+        socket.connect();
+      }
+      get().showToast(`Chưa kết nối máy chủ, sẽ tự vào phòng #${clean} khi kết nối xong`);
+      return;
     }
-    get().showToast(`🏠 Đang vào phòng #${clean}`);
+    get().showToast(`Đang vào phòng #${clean}`);
   },
 
   updateLocalProfile: (patch) => {

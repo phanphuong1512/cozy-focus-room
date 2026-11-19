@@ -118,6 +118,11 @@ export const TopBar: React.FC = () => {
           <span className="text-xs font-bold text-pink-100 tracking-wide">
             {roomCode}
           </span>
+          {!connected && (
+            <span className="text-[10px] font-semibold text-amber-300">
+              Đang kết nối...
+            </span>
+          )}
           <span className="flex items-center gap-1 text-[11px] text-slate-300 border-l border-white/15 pl-2">
             <Users className="w-3 h-3 text-pink-300" />
             {playerCount}
