@@ -936,14 +936,24 @@ export const IsometricRoomCanvas: React.FC = () => {
         const coords = toWorldGrid(e.clientX, e.clientY);
         const state = useGameStore.getState();
 
-        // Middle click, Alt+Left, or Right click -> Always pan camera (even in Decor mode)
-        if (
-          e.button === 1 ||
-          (e.button === 0 && e.altKey) ||
-          e.button === 2
-        ) {
+        const startPan = () => {
+          e.preventDefault();
           isPanning = true;
           panStart = { x: e.clientX - camPan.x, y: e.clientY - camPan.y };
+          try {
+            canvas.setPointerCapture(e.pointerId);
+          } catch {
+            // Ignore capture errors on synthetic events
+          }
+        };
+
+        // Middle click, Alt+Left, Space+Left, or Right click -> Always pan camera (even in Decor mode)
+        if (
+          e.button === 1 ||
+          (e.button === 0 && (e.altKey || pressedKeys.has(' '))) ||
+          e.button === 2
+        ) {
+          startPan();
           return;
         }
 
@@ -1016,10 +1026,12 @@ export const IsometricRoomCanvas: React.FC = () => {
             return;
           }
 
-          // 3. No tool active: click an existing item to pick it up!
+          // 3. No tool active: click an existing item to pick it up, or drag empty space to pan!
           const hit = pickItemAtScreen(coords.canvasX, coords.canvasY);
           if (hit) {
             state.startMovingItem(hit.uid);
+          } else {
+            startPan();
           }
           return;
         }
@@ -1202,11 +1214,13 @@ export const IsometricRoomCanvas: React.FC = () => {
         app.ticker.maxFPS = document.hidden ? 20 : 60;
       };
 
+      canvas.style.touchAction = 'none';
       canvas.addEventListener('contextmenu', onContextMenu);
       canvas.addEventListener('wheel', onWheel, { passive: false });
       canvas.addEventListener('pointerdown', onPointerDown);
       window.addEventListener('pointermove', onPointerMove);
       window.addEventListener('pointerup', onPointerUp);
+      window.addEventListener('pointercancel', onPointerUp);
       window.addEventListener('keydown', onKeyDown);
       window.addEventListener('keyup', onKeyUp);
       document.addEventListener('visibilitychange', onVisibilityChange);
