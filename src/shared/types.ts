@@ -84,6 +84,7 @@ export interface CatalogItem {
   isSurface?: boolean;
   surfaceHeightPx?: number;
   wallElevationPx?: number;
+  wallRowSpan?: { start: number; end: number };
   seatSlots?: SeatSlot[];
   lightEmitter?: LightEmitterConfig;
   description?: string;

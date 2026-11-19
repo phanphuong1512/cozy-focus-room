@@ -39,7 +39,7 @@ import type {
   WallTheme,
 } from '../shared/types';
 
-const WALL_HEIGHT = 155;
+const WALL_HEIGHT = 195; // 3 rows x 65px -> matches 67px isometric tile edge for true square wall cells
 
 const WALL_PALETTES: Record<
   WallTheme,
@@ -1471,6 +1471,10 @@ export const IsometricRoomCanvas: React.FC = () => {
                 hoverCursor.stroke({ color: 0xe0f2fe, width: 2 });
               } else if (target.layer === 'wall') {
                 const onLeftWall = isWallItemLeft(target.gx, target.gy, target.flipped);
+                const rowH = WALL_HEIGHT / 3;
+                const spanRows = cat.wallRowSpan ?? { start: 1, end: 1 };
+                const y0 = spanRows.start * rowH;
+                const y1 = (spanRows.end + 1) * rowH;
                 for (const cell of target.cells) {
                   const p0 = gridToScreen(cell.gx, cell.gy);
                   const p1 = onLeftWall
@@ -1478,17 +1482,17 @@ export const IsometricRoomCanvas: React.FC = () => {
                     : gridToScreen(cell.gx + 1, cell.gy);
                   hoverCursor.poly([
                     p0.x,
-                    p0.y,
+                    p0.y - y0,
                     p1.x,
-                    p1.y,
+                    p1.y - y0,
                     p1.x,
-                    p1.y - WALL_HEIGHT,
+                    p1.y - y1,
                     p0.x,
-                    p0.y - WALL_HEIGHT,
+                    p0.y - y1,
                   ]);
                   hoverCursor.fill({
                     color: cell.valid ? 0x22c55e : 0xef4444,
-                    alpha: cell.valid ? 0.35 : 0.48,
+                    alpha: cell.valid ? 0.38 : 0.5,
                   });
                   hoverCursor.stroke({
                     color: cell.valid ? 0x86efac : 0xfca5a5,
@@ -1554,6 +1558,10 @@ export const IsometricRoomCanvas: React.FC = () => {
                   hoveredItem.gy,
                   hoveredItem.flipped
                 );
+                const rowH = WALL_HEIGHT / 3;
+                const spanRows = hoveredCat.wallRowSpan ?? { start: 1, end: 1 };
+                const y0 = spanRows.start * rowH;
+                const y1 = (spanRows.end + 1) * rowH;
                 for (const cell of wallCells) {
                   const p0 = gridToScreen(cell.gx, cell.gy);
                   const p1 = cell.onLeftWall
@@ -1561,15 +1569,15 @@ export const IsometricRoomCanvas: React.FC = () => {
                     : gridToScreen(cell.gx + 1, cell.gy);
                   hoverCursor.poly([
                     p0.x,
-                    p0.y,
+                    p0.y - y0,
                     p1.x,
-                    p1.y,
+                    p1.y - y0,
                     p1.x,
-                    p1.y - WALL_HEIGHT,
+                    p1.y - y1,
                     p0.x,
-                    p0.y - WALL_HEIGHT,
+                    p0.y - y1,
                   ]);
-                  hoverCursor.fill({ color: 0x38bdf8, alpha: 0.25 });
+                  hoverCursor.fill({ color: 0x38bdf8, alpha: 0.28 });
                   hoverCursor.stroke({ color: 0x7dd3fc, width: 2.5, alpha: 0.9 });
                 }
               } else if (hoveredItem && hoveredCat && hoveredItem.layer !== 'surface') {
