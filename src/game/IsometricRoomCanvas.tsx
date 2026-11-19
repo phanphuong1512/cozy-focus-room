@@ -192,7 +192,7 @@ export const IsometricRoomCanvas: React.FC = () => {
     let isPanning = false;
     let panStart = { x: 0, y: 0 };
     let isPointerDownLeft = false;
-    let hoverGrid: { gx: number; gy: number } | null = null;
+    let hoverGrid: { gx: number; gy: number; localX: number; localY: number } | null = null;
     let hoveredExistingItemUid: string | null = null;
     let lastPreviewEmitAt = 0;
     let lastStepSfxAt = 0;
@@ -731,11 +731,61 @@ export const IsometricRoomCanvas: React.FC = () => {
         return row[ix] !== '.';
       };
 
+      const pickWallCellAtLocal = (
+        localX: number,
+        localY: number
+      ): { gx: number; gy: number; isLeft: boolean; rowIdx: number } | null => {
+        const state = useGameStore.getState();
+        const H = state.layout.floorMap.length;
+        const W = Math.max(...state.layout.floorMap.map((r) => r.length));
+        const rowH = WALL_HEIGHT / 3;
+
+        const candidates: { gx: number; gy: number; isLeft: boolean }[] = [];
+        if (Array.isArray(state.layout.walls)) {
+          for (const wKey of state.layout.walls) {
+            const [side, coords] = wKey.split(':');
+            if (!coords) continue;
+            const [sx, sy] = coords.split(',').map(Number);
+            if (Number.isFinite(sx) && Number.isFinite(sy)) {
+              candidates.push({ gx: sx, gy: sy, isLeft: side === 'L' });
+            }
+          }
+        } else {
+          for (let gy = 0; gy < H; gy++) candidates.push({ gx: 0, gy, isLeft: true });
+          for (let gx = 0; gx < W; gx++) candidates.push({ gx, gy: 0, isLeft: false });
+        }
+
+        // Front-most wall segment wins if multiple overlap on screen
+        candidates.sort((a, b) => b.gx + b.gy - (a.gx + a.gy));
+
+        for (const seg of candidates) {
+          const p0 = gridToScreen(seg.gx, seg.gy);
+          const p1 = seg.isLeft
+            ? gridToScreen(seg.gx, seg.gy + 1)
+            : gridToScreen(seg.gx + 1, seg.gy);
+          const minX = Math.min(p0.x, p1.x);
+          const maxX = Math.max(p0.x, p1.x);
+          if (localX < minX || localX > maxX) continue;
+
+          const spanX = p1.x - p0.x;
+          const t = spanX !== 0 ? (localX - p0.x) / spanX : 0.5;
+          const baseY = p0.y + t * (p1.y - p0.y);
+          const h = baseY - localY;
+          if (h >= 0 && h <= WALL_HEIGHT) {
+            const rowIdx = Math.max(0, Math.min(2, Math.floor(h / rowH)));
+            return { gx: seg.gx, gy: seg.gy, isLeft: seg.isLeft, rowIdx };
+          }
+        }
+        return null;
+      };
+
       const computePlacementTarget = (
         gx: number,
         gy: number,
         catalogId: string,
-        flipped: boolean
+        flipped: boolean,
+        localX?: number,
+        localY?: number
       ): PlacementTargetResult | null => {
         const cat = getCatalogItem(catalogId);
         if (!cat) return null;
@@ -788,80 +838,68 @@ export const IsometricRoomCanvas: React.FC = () => {
         if (cat.placement === 'wall') {
           const span = Math.max(1, cat.footprint.w);
           const customWalls = state.layout.walls;
+          const rowH = WALL_HEIGHT / 3;
+          const baseSpan = cat.wallRowSpan ?? { start: 1, end: 1 };
+          const rowCount = Math.max(1, baseSpan.end - baseSpan.start + 1);
 
-          if (Array.isArray(customWalls)) {
-            const wallSet = new Set(customWalls);
-            const ix = Math.max(0, Math.min(W - 1, Math.floor(gx)));
-            const iy = Math.max(0, Math.min(H - 1, Math.floor(gy)));
-            const fracX = gx - ix;
-            const fracY = gy - iy;
-            let attachLeftWall = flipped ? fracY < fracX : fracX <= fracY;
-            if (attachLeftWall && !wallSet.has(`L:${ix},${iy}`) && wallSet.has(`R:${ix},${iy}`)) {
-              attachLeftWall = false;
-            } else if (!attachLeftWall && !wallSet.has(`R:${ix},${iy}`) && wallSet.has(`L:${ix},${iy}`)) {
-              attachLeftWall = true;
-            }
+          const hitWall =
+            localX !== undefined && localY !== undefined
+              ? pickWallCellAtLocal(localX, localY)
+              : null;
 
-            const originGx = attachLeftWall ? ix : Math.max(0, Math.min(W - span, ix));
-            const originGy = attachLeftWall ? Math.max(0, Math.min(H - span, iy)) : iy;
+          if (hitWall) {
+            const wallSet = Array.isArray(customWalls) ? new Set(customWalls) : null;
+            const attachLeftWall = hitWall.isLeft;
+            const originGx = attachLeftWall
+              ? hitWall.gx
+              : Math.max(0, Math.min(W - span, hitWall.gx));
+            const originGy = attachLeftWall
+              ? Math.max(0, Math.min(H - span, hitWall.gy))
+              : hitWall.gy;
 
             const cells: PlacementCellStatus[] = [];
             for (let i = 0; i < span; i++) {
               const cx = attachLeftWall ? originGx : originGx + i;
               const cy = attachLeftWall ? originGy + i : originGy;
-              const key = attachLeftWall ? `L:${cx},${cy}` : `R:${cx},${cy}`;
-              cells.push({ gx: cx, gy: cy, valid: wallSet.has(key) });
+              const cellValid = wallSet
+                ? wallSet.has(attachLeftWall ? `L:${cx},${cy}` : `R:${cx},${cy}`)
+                : cx >= 0 && cx < W && cy >= 0 && cy < H && isTileWalkable(cx, cy);
+              cells.push({ gx: cx, gy: cy, valid: cellValid });
             }
 
+            const startRow = Math.max(0, Math.min(3 - rowCount, hitWall.rowIdx));
+            const elevPx = startRow * rowH + (cat.id === 'shower_set' ? 12 : 6);
             const allValid = cells.every((c) => c.valid);
+
             return {
               gx: originGx,
               gy: originGy,
               flipped: attachLeftWall,
               layer: 'wall',
               parentSurfaceUid: undefined,
-              elevationPx: cat.wallElevationPx ?? 75,
+              elevationPx: elevPx,
               valid: allValid,
               hint: allValid
-                ? attachLeftWall
-                  ? `Treo tường Trái (${span} ô) — [R] xoay`
-                  : `Treo tường Phải (${span} ô) — [R] xoay`
-                : '⚠️ Hãy rê vào ô đã dựng tường để treo đồ',
+                ? `Treo tường tầng ${startRow + 1} (${span} ô)`
+                : '⚠️ Không đủ ô tường liền kề để treo đồ này',
               cells,
             };
           }
 
-          const attachLeftWall = gx <= gy;
-          const originGx = attachLeftWall
-            ? 0
-            : Math.max(0, Math.min(W - span, Math.floor(gx - (span - 1) / 2)));
-          const originGy = attachLeftWall
-            ? Math.max(0, Math.min(H - span, Math.floor(gy - (span - 1) / 2)))
-            : 0;
-
-          const cells: PlacementCellStatus[] = [];
-          for (let i = 0; i < span; i++) {
-            const cx = attachLeftWall ? 0 : originGx + i;
-            const cy = attachLeftWall ? originGy + i : 0;
-            const cellValid = cx >= 0 && cx < W && cy >= 0 && cy < H && isTileWalkable(cx, cy);
-            cells.push({ gx: cx, gy: cy, valid: cellValid });
-          }
-
-          const allValid = cells.every((c) => c.valid);
+          // Fallback when mouse is not pointing directly at any wall panel
+          const ix = Math.max(0, Math.min(W - 1, Math.floor(gx)));
+          const iy = Math.max(0, Math.min(H - 1, Math.floor(gy)));
+          const attachLeftWall = flipped ? iy >= ix : ix <= iy;
           return {
-            gx: attachLeftWall ? 0 : Math.max(0.05, originGx),
-            gy: attachLeftWall ? Math.max(0.05, originGy) : 0,
-            flipped: attachLeftWall ? !flipped : flipped,
+            gx: ix,
+            gy: iy,
+            flipped: attachLeftWall,
             layer: 'wall',
             parentSurfaceUid: undefined,
-            elevationPx: cat.wallElevationPx ?? 75,
-            valid: allValid,
-            hint: allValid
-              ? attachLeftWall
-                ? `Treo tường Trái (${span} ô) — [R] xoay`
-                : `Treo tường Phải (${span} ô) — [R] xoay`
-              : '⚠️ Phần tường này không có sàn phía dưới',
-            cells,
+            elevationPx: baseSpan.start * rowH + 6,
+            valid: false,
+            hint: '⚠️ Hãy rê chuột trực tiếp lên ô tường muốn treo đồ',
+            cells: [{ gx: ix, gy: iy, valid: false }],
           };
         }
 
@@ -918,6 +956,8 @@ export const IsometricRoomCanvas: React.FC = () => {
         return {
           canvasX,
           canvasY,
+          localX,
+          localY,
           ...screenToGrid(localX, localY),
         };
       };
@@ -998,7 +1038,9 @@ export const IsometricRoomCanvas: React.FC = () => {
               coords.gx,
               coords.gy,
               activeCatId,
-              state.placeFlipped
+              state.placeFlipped,
+              coords.localX,
+              coords.localY
             );
             if (target && target.valid) {
               const existing = state.movingItemUid
@@ -1099,7 +1141,12 @@ export const IsometricRoomCanvas: React.FC = () => {
         }
 
         const coords = toWorldGrid(e.clientX, e.clientY);
-        hoverGrid = { gx: coords.gx, gy: coords.gy };
+        hoverGrid = {
+          gx: coords.gx,
+          gy: coords.gy,
+          localX: coords.localX,
+          localY: coords.localY,
+        };
         const state = useGameStore.getState();
 
         if (state.buildMode) {
@@ -1121,7 +1168,9 @@ export const IsometricRoomCanvas: React.FC = () => {
               coords.gx,
               coords.gy,
               activeCatId,
-              state.placeFlipped
+              state.placeFlipped,
+              coords.localX,
+              coords.localY
             );
             setHoverHint(target?.hint || null);
 
@@ -1438,7 +1487,9 @@ export const IsometricRoomCanvas: React.FC = () => {
               hoverGrid.gx,
               hoverGrid.gy,
               activeCatId,
-              state.placeFlipped
+              state.placeFlipped,
+              hoverGrid.localX,
+              hoverGrid.localY
             );
             const cat = getCatalogItem(activeCatId);
             if (target && cat) {
@@ -1486,9 +1537,15 @@ export const IsometricRoomCanvas: React.FC = () => {
               } else if (target.layer === 'wall') {
                 const onLeftWall = isWallItemLeft(target.gx, target.gy, target.flipped);
                 const rowH = WALL_HEIGHT / 3;
-                const spanRows = cat.wallRowSpan ?? { start: 1, end: 1 };
-                const y0 = spanRows.start * rowH;
-                const y1 = (spanRows.end + 1) * rowH;
+                const baseSpan = cat.wallRowSpan ?? { start: 1, end: 1 };
+                const rowCount = Math.max(1, baseSpan.end - baseSpan.start + 1);
+                const startRow = Math.max(
+                  0,
+                  Math.min(3 - rowCount, Math.floor((target.elevationPx || 0) / rowH))
+                );
+                const endRow = startRow + rowCount - 1;
+                const y0 = startRow * rowH;
+                const y1 = (endRow + 1) * rowH;
                 for (const cell of target.cells) {
                   const p0 = gridToScreen(cell.gx, cell.gy);
                   const p1 = onLeftWall
@@ -1573,9 +1630,18 @@ export const IsometricRoomCanvas: React.FC = () => {
                   hoveredItem.flipped
                 );
                 const rowH = WALL_HEIGHT / 3;
-                const spanRows = hoveredCat.wallRowSpan ?? { start: 1, end: 1 };
-                const y0 = spanRows.start * rowH;
-                const y1 = (spanRows.end + 1) * rowH;
+                const baseSpan = hoveredCat.wallRowSpan ?? { start: 1, end: 1 };
+                const rowCount = Math.max(1, baseSpan.end - baseSpan.start + 1);
+                const startRow = Math.max(
+                  0,
+                  Math.min(
+                    3 - rowCount,
+                    Math.floor((hoveredItem.elevationPx || hoveredCat.wallElevationPx || 0) / rowH)
+                  )
+                );
+                const endRow = startRow + rowCount - 1;
+                const y0 = startRow * rowH;
+                const y1 = (endRow + 1) * rowH;
                 for (const cell of wallCells) {
                   const p0 = gridToScreen(cell.gx, cell.gy);
                   const p1 = cell.onLeftWall
