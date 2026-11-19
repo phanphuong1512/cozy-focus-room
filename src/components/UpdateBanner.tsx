@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Download, RefreshCw, Sparkles, X } from 'lucide-react';
 import type { Update } from '@tauri-apps/plugin-updater';
 
-const CHECK_INTERVAL_MS = 10 * 60 * 1000;
+const CHECK_INTERVAL_MS = 60 * 1000; // Check every 1 minute while playing
 
 export const UpdateBanner: React.FC = () => {
   const [update, setUpdate] = useState<Update | null>(null);
@@ -11,6 +11,7 @@ export const UpdateBanner: React.FC = () => {
   const [progressPct, setProgressPct] = useState<number | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const isCheckingRef = useRef(false);
+  const dismissedVersionRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) {
@@ -27,7 +28,9 @@ export const UpdateBanner: React.FC = () => {
         const found = await check();
         if (!cancelled && found) {
           setUpdate(found);
-          setDismissed(false);
+          if (dismissedVersionRef.current !== found.version) {
+            setDismissed(false);
+          }
           setErrorMsg(null);
         }
       } catch {
@@ -37,13 +40,23 @@ export const UpdateBanner: React.FC = () => {
       }
     };
 
+    const handleFocusOrVisible = () => {
+      if (document.visibilityState === 'visible') {
+        checkForUpdates();
+      }
+    };
+
     const initialTimer = window.setTimeout(checkForUpdates, 2500);
     const interval = window.setInterval(checkForUpdates, CHECK_INTERVAL_MS);
+    window.addEventListener('focus', checkForUpdates);
+    document.addEventListener('visibilitychange', handleFocusOrVisible);
 
     return () => {
       cancelled = true;
       window.clearTimeout(initialTimer);
       window.clearInterval(interval);
+      window.removeEventListener('focus', checkForUpdates);
+      document.removeEventListener('visibilitychange', handleFocusOrVisible);
     };
   }, []);
 
@@ -107,7 +120,10 @@ export const UpdateBanner: React.FC = () => {
         {!installing && (
           <button
             type="button"
-            onClick={() => setDismissed(true)}
+            onClick={() => {
+              dismissedVersionRef.current = update.version;
+              setDismissed(true);
+            }}
             aria-label="Đóng thông báo cập nhật"
             className="rounded-lg p-1 text-slate-400 hover:bg-white/10 hover:text-white transition"
           >
@@ -145,7 +161,10 @@ export const UpdateBanner: React.FC = () => {
         {!installing && (
           <button
             type="button"
-            onClick={() => setDismissed(true)}
+            onClick={() => {
+              dismissedVersionRef.current = update.version;
+              setDismissed(true);
+            }}
             className="rounded-xl bg-white/8 hover:bg-white/15 px-3 py-1.5 text-[11px] font-semibold text-slate-300 transition"
           >
             Để sau
