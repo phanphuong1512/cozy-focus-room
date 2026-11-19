@@ -1,0 +1,49 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Cozy Focus Room",
+  "version": "1.0.0",
+  "identifier": "com.cozyfocus.room",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Cozy Focus Room: Lo-Fi & Together",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 360,
+        "minHeight": 360,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "createUpdaterArtifacts": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQ5NjlGRUIzN0REMEY2QzEKUldUQjl0QjlzLzVwMlZ2bDg1ZzNkREFxUzRpY0hHaFpHMWRLM205VENwb2cxNmM4QXU1ZHYrc04K",
+      "endpoints": [
+        "https://github.com/phanphuong1512/cozy-focus-room/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}

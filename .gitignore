@@ -1,0 +1,20 @@
+# Dependencies & build outputs
+node_modules/
+dist/
+src-tauri/target/
+
+# Runtime server persistence & local source sheets
+server/data/
+assets/
+prompt_spec.txt
+
+# Environment & signing keys (NEVER commit private keys)
+.env
+.env.*
+!.env.example
+*.key
+*.sig
+
+# OS files
+.DS_Store
+Thumbs.db

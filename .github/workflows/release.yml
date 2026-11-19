@@ -1,0 +1,217 @@
+name: Build & Auto-Release Desktop App
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "README.md"
+      - "docs/**"
+      - ".env.example"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  prepare-release:
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.meta.outputs.should_release }}
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Compute release version and create draft release
+        id: meta
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          COMMIT_MSG="$(git log -1 --pretty=%B)"
+          if echo "$COMMIT_MSG" | grep -qiE '\[(skip release|no-release|skip ci)\]'; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping release due to commit flag."
+            exit 0
+          fi
+
+          BASE_MM="$(node -e "const p=require('./package.json').version.split('.'); console.log(p[0]+'.'+p[1]);")"
+          VERSION="${BASE_MM}.${GITHUB_RUN_NUMBER}"
+          TAG="v${VERSION}"
+
+          git log -1 --pretty=format:"%s%n%n%b" > release_notes.txt
+          if [ ! -s release_notes.txt ]; then
+            echo "Cập nhật Cozy Focus Room ${TAG}" > release_notes.txt
+          fi
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --draft --title "Cozy Focus Room ${TAG}" --notes-file release_notes.txt
+          else
+            gh release create "$TAG" --draft --title "Cozy Focus Room ${TAG}" --notes-file release_notes.txt
+          fi
+
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+  build-and-release:
+    needs: prepare-release
+    if: needs.prepare-release.outputs.should_release == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: macos
+            rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
+            tauri_args: --target universal-apple-darwin
+          - os: windows-latest
+            platform: windows
+            rust_targets: x86_64-pc-windows-msvc
+            tauri_args: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_targets }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+          key: ${{ matrix.platform }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Stamp release version into manifests
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const v = process.env.RELEASE_VERSION;
+
+            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            pkg.version = v;
+            fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
+
+            const tauriConf = JSON.parse(fs.readFileSync("src-tauri/tauri.conf.json", "utf8"));
+            tauriConf.version = v;
+            fs.writeFileSync("src-tauri/tauri.conf.json", JSON.stringify(tauriConf, null, 2) + "\n");
+
+            const cargo = fs.readFileSync("src-tauri/Cargo.toml", "utf8");
+            fs.writeFileSync(
+              "src-tauri/Cargo.toml",
+              cargo.replace(/^version\s*=\s*"[^"]*"/m, `version = "${v}"`)
+            );
+          '
+
+      - name: Build Tauri Desktop bundles & updater packages
+        shell: bash
+        env:
+          VITE_SERVER_URL: ${{ vars.VITE_SERVER_URL }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        run: |
+          npx tauri build ${{ matrix.tauri_args }}
+
+      - name: Collect and upload installers to draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare-release.outputs.tag }}
+        run: |
+          mkdir -p artifacts_to_upload
+          find src-tauri/target -path "*/release/bundle/*" -type f \( \
+            -name "*.dmg" -o \
+            -name "*.tar.gz" -o \
+            -name "*.tar.gz.sig" -o \
+            -name "*-setup.exe" -o \
+            -name "*-setup.exe.sig" -o \
+            -name "*.msi" -o \
+            -name "*.msi.sig" \
+          \) -exec cp {} artifacts_to_upload/ \;
+
+          ls -la artifacts_to_upload/
+          gh release upload "$TAG" artifacts_to_upload/* --clobber
+
+  publish-release:
+    needs: [prepare-release, build-and-release]
+    if: needs.prepare-release.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Tauri v2 latest.json and publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare-release.outputs.tag }}
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: |
+          gh release view "$TAG" --json assets,body > release_info.json
+          mkdir -p sigs
+          gh release download "$TAG" --pattern "*.sig" --dir sigs
+          ls -la sigs/
+
+          node -e '
+            const fs = require("fs");
+            const path = require("path");
+            const info = JSON.parse(fs.readFileSync("release_info.json", "utf8"));
+            const assets = info.assets || [];
+
+            const findAsset = (suffix) => assets.find((a) => a.name.endsWith(suffix));
+            const readSig = (assetName) => {
+              const sigPath = path.join("sigs", assetName + ".sig");
+              if (!fs.existsSync(sigPath)) {
+                throw new Error("Missing signature file: " + sigPath);
+              }
+              return fs.readFileSync(sigPath, "utf8").trim();
+            };
+
+            const macTar = findAsset(".app.tar.gz") || findAsset(".tar.gz");
+            const winInstaller = findAsset("-setup.exe") || findAsset(".msi");
+            if (!macTar) throw new Error("Missing macOS updater tarball (.app.tar.gz)");
+            if (!winInstaller) throw new Error("Missing Windows updater installer (-setup.exe)");
+
+            const macSig = readSig(macTar.name);
+            const winSig = readSig(winInstaller.name);
+
+            const latest = {
+              version: process.env.VERSION,
+              notes: (info.body || "").trim() || `Cozy Focus Room v${process.env.VERSION}`,
+              pub_date: new Date().toISOString(),
+              platforms: {
+                "darwin-aarch64": {
+                  signature: macSig,
+                  url: macTar.url,
+                },
+                "darwin-x86_64": {
+                  signature: macSig,
+                  url: macTar.url,
+                },
+                "windows-x86_64": {
+                  signature: winSig,
+                  url: winInstaller.url,
+                },
+              },
+            };
+
+            fs.writeFileSync("latest.json", JSON.stringify(latest, null, 2) + "\n");
+            console.log("Generated latest.json:\n", JSON.stringify(latest, null, 2));
+          '
+
+          gh release upload "$TAG" latest.json --clobber
+          gh release edit "$TAG" --draft=false --latest
